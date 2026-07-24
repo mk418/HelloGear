@@ -141,7 +141,13 @@ Set management lives on the character sheet rather than in a window of its own. 
 
 **Anchoring.** `CharacterFrame` is wider and taller than the frame you can see — its own edges sit in dead space, so anything anchored to them floats clear of the artwork. Measured on 1.15.9 via `/hg dock`: the frame spans 0..384 while the slot columns run 21..343.
 
-The answer turned out to be much simpler than reconstructing those edges. Now that the character frame is modern chrome, its border is a nine-slice, and `CharacterFrame.NineSlice`'s bounds *are* the visible frame — exactly the thing several rounds of measuring were trying to derive. Anchoring to it matches the right edge, the top and the bottom in one go, with no arithmetic at all. The measured path below is kept as a fallback for chrome that has no nine-slice.
+Three references were tried, in this order:
+
+1. **`CharacterFrame.NineSlice`** — its bounds *are* the visible frame, so anchoring to it would settle all three edges at once. Preferred when present; on 1.15.9 it isn't, despite the frame having modern chrome.
+2. **Mirroring the slot columns' margin** — the left column sits 21px inside the frame, so assume the right column does too. Wrong: the margins aren't symmetric (the right is nearer 9), and it overshot by about ten pixels.
+3. **`CharacterFrameCloseButton`** — Blizzard pins it to the artwork's top-right corner, so its own right and top edges sit a few pixels inside the frame's. This is what's used, and it gives the top edge as well as the right.
+
+The bottom still comes from the tab row, which is the only thing pinned near the artwork's bottom edge.
 
 That 20 isn't hardcoded — it's only the fallback. Both the button and the panel are placed from the paperdoll's own slot columns, which are laid out symmetrically inside the artwork: the left column's margin is also the right column's, so `right column's right edge + that margin` gives the artwork's edge. The button sits directly above the top slot of the right-hand column, sharing its right edge, and so inherits the frame's real margin for free.
 

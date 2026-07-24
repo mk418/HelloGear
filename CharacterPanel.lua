@@ -404,6 +404,25 @@ function Panel.ComputeArtBottom(frameBottom, tabTop)
     return offset
 end
 
+-- The close button's own edges sit this far inside the artwork's corner.
+local CLOSE_TO_EDGE = 3
+
+-- Right and top of the frame you can actually see. Preferred reference is the
+-- close button, which Blizzard pins to the artwork's top-right corner; the
+-- slot-column derivation is the fallback for a frame without one.
+local function VisibleCorner()
+    local close = _G.CharacterFrameCloseButton
+    if close and close:GetRight() and close:GetTop() then
+        return close:GetRight() + CLOSE_TO_EDGE, close:GetTop() + CLOSE_TO_EDGE
+    end
+    local left, right = ColumnEdgeSlots()
+    local inset = (left and right)
+        and Panel.ComputeArtInset(CharacterFrame:GetLeft(), CharacterFrame:GetRight(),
+                left:GetLeft(), right:GetRight())
+        or DEFAULT_ART_INSET
+    return CharacterFrame:GetRight() + inset, CharacterFrame:GetTop()
+end
+
 -- nil if the frame hasn't been laid out yet.
 local function ArtInset()
     local left, right = ColumnEdgeSlots()
@@ -436,10 +455,13 @@ local function FitToFrame()
         return
     end
 
-    -- Older chrome: reconstruct the artwork's edges by measuring the paperdoll.
-    local inset = ArtInset() or DEFAULT_ART_INSET
-    local artRight = CharacterFrame:GetRight() + inset
-    local x = (artRight - CharacterFrame:GetLeft()) - ns.CHROME_INSET + nudge
+    -- No nine-slice on this client, so the visible corner has to come from
+    -- something Blizzard pins to it. The close button is exactly that, and it
+    -- beats deriving the edge from the slot columns: those turn out not to be
+    -- symmetric within the artwork (left margin 21, right margin nearer 9), so
+    -- mirroring one onto the other overshoots by about ten pixels.
+    local right, top = VisibleCorner()
+    local x = (right - CharacterFrame:GetLeft()) - ns.CHROME_INSET + nudge
 
     local tab1 = _G.CharacterFrameTab1
     local bottom = Panel.ComputeArtBottom(CharacterFrame:GetBottom(), tab1 and tab1:GetTop())
@@ -448,7 +470,7 @@ local function FitToFrame()
     -- frame's artwork and tracks it, rather than carrying a fixed height that
     -- would over- or under-shoot.
     panel:ClearAllPoints()
-    panel:SetPoint("TOPLEFT", CharacterFrame, "TOPLEFT", x, -PANEL_MARGIN)
+    panel:SetPoint("TOPLEFT", CharacterFrame, "TOPLEFT", x, top - CharacterFrame:GetTop() - PANEL_MARGIN)
     panel:SetPoint("BOTTOMLEFT", CharacterFrame, "BOTTOMLEFT", x, bottom + PANEL_MARGIN)
 end
 
@@ -468,7 +490,11 @@ function Panel:ReportGeometry()
         ns:Print("nine-slice (the frame you see): right %.1f  top %.1f  bottom %.1f |cff80ff80(in use)|r",
             visible:GetRight(), visible:GetTop(), visible:GetBottom())
     else
-        ns:Print("|cffff8080no nine-slice|r - falling back to measuring the paperdoll")
+        local close = _G.CharacterFrameCloseButton
+        ns:Print("|cffff8080no nine-slice|r - using the close button: right %.1f  top %.1f",
+            close and close:GetRight() or -1, close and close:GetTop() or -1)
+        local cornerX, cornerY = VisibleCorner()
+        ns:Print("visible corner: right %.1f  top %.1f", cornerX, cornerY)
     end
     if left and right then
         ns:Print("slot columns: left edge %.1f  right edge %.1f", left:GetLeft(), right:GetRight())
