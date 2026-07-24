@@ -7,9 +7,10 @@ local Sets = ns.Sets
 
 local PANEL_WIDTH = 214
 local PANEL_HEIGHT = 400   -- provisional; FitToFrame anchors top and bottom
--- Zero: the panel spans the artwork's full height so its top and bottom edges
--- line up with the character frame's rather than floating inside them.
-local PANEL_MARGIN = 0
+-- The drawn border is about as wide as the distance it sits inside the frame's
+-- bounds, so one of these is how far to overlap to put two borders on top of
+-- each other rather than side by side.
+local BORDER_WIDTH = 11
 local ROW_HEIGHT = 36
 local CONTENT_LEFT = 16    -- clear of the backdrop's 12px border
 local CONTENT_RIGHT = -34  -- border, plus room for the scrollbar inside it
@@ -447,11 +448,23 @@ local function FitToFrame()
     -- whose bounds ARE the frame you can see - which is the thing every
     -- derivation up to here was trying to reconstruct by measuring around it.
     -- Anchor to it directly and the panel matches on all three edges at once.
+    -- The panel's frame is inflated by the border inset on every side, so its
+    -- *drawn* edges land on the character frame's visible edges instead of
+    -- sitting inside them - that's what was making it look short.
+    --
+    -- Horizontally it goes one border width further still, tucking the panel's
+    -- left edge underneath the character frame's right border. Combined with
+    -- the panel drawing behind the character frame (see BuildPanel), that
+    -- leaves one shared seam rather than two borders back to back, which is
+    -- the difference between "integrated" and "parked next to".
+    local inset = ns.CHROME_INSET
+    local overlap = inset + BORDER_WIDTH
+
     local visible = CharacterFrame.NineSlice
     if visible and visible:GetRight() then
         panel:ClearAllPoints()
-        panel:SetPoint("TOPLEFT", visible, "TOPRIGHT", -ns.CHROME_INSET + nudge, 0)
-        panel:SetPoint("BOTTOMLEFT", visible, "BOTTOMRIGHT", -ns.CHROME_INSET + nudge, 0)
+        panel:SetPoint("TOPLEFT", visible, "TOPRIGHT", -overlap + nudge, inset)
+        panel:SetPoint("BOTTOMLEFT", visible, "BOTTOMRIGHT", -overlap + nudge, -inset)
         return
     end
 
@@ -461,7 +474,7 @@ local function FitToFrame()
     -- symmetric within the artwork (left margin 21, right margin nearer 9), so
     -- mirroring one onto the other overshoots by about ten pixels.
     local right, top = VisibleCorner()
-    local x = (right - CharacterFrame:GetLeft()) - ns.CHROME_INSET + nudge
+    local x = (right - CharacterFrame:GetLeft()) - overlap + nudge
 
     local tab1 = _G.CharacterFrameTab1
     local bottom = Panel.ComputeArtBottom(CharacterFrame:GetBottom(), tab1 and tab1:GetTop())
@@ -470,8 +483,9 @@ local function FitToFrame()
     -- frame's artwork and tracks it, rather than carrying a fixed height that
     -- would over- or under-shoot.
     panel:ClearAllPoints()
-    panel:SetPoint("TOPLEFT", CharacterFrame, "TOPLEFT", x, top - CharacterFrame:GetTop() - PANEL_MARGIN)
-    panel:SetPoint("BOTTOMLEFT", CharacterFrame, "BOTTOMLEFT", x, bottom + PANEL_MARGIN)
+    panel:SetPoint("TOPLEFT", CharacterFrame, "TOPLEFT", x,
+        (top - CharacterFrame:GetTop()) + inset)
+    panel:SetPoint("BOTTOMLEFT", CharacterFrame, "BOTTOMLEFT", x, bottom - inset)
 end
 
 -- Prints what the addon can actually see of the character frame. Guessing at
@@ -509,6 +523,30 @@ function Panel:ReportGeometry()
     ns:Print("panel: left %.1f  height %.1f   nudge: %d",
         panel:GetLeft() or -1, panel:GetHeight() or -1, ns.Config:Get("dockNudge") or 0)
     ns:Print("use |cffffff00/hg dock <pixels>|r to shift it; negative moves it left")
+end
+
+-- Dumps the character frame's own artwork so the panel can be built from the
+-- same pieces instead of from a look-alike chosen by eye.
+function Panel:ReportArtwork()
+    for _, frame in ipairs({ CharacterFrame, PaperDollFrame }) do
+        if frame then
+            ns:Print("|cffffd200%s|r regions:", frame:GetName() or "?")
+            local shown = 0
+            for _, region in ipairs({ frame:GetRegions() }) do
+                if region.GetTexture and shown < 14 then
+                    local atlas = region.GetAtlas and region:GetAtlas()
+                    local texture = region:GetTexture()
+                    if atlas or texture then
+                        shown = shown + 1
+                        ns:Print("  %s%s  [%s]",
+                            atlas and "atlas:" or "", tostring(atlas or texture),
+                            tostring(region:GetDrawLayer()))
+                    end
+                end
+            end
+            if shown == 0 then ns:Print("  (none)") end
+        end
+    end
 end
 
 function Panel:SetDockNudge(pixels)
@@ -557,7 +595,12 @@ local function BuildPanel()
     -- Provisional; FitToFrame docks it flush against the artwork once the
     -- character frame has been laid out.
     panel:SetPoint("TOPLEFT", CharacterFrame, "TOPRIGHT", -45, -12)
-    panel:SetFrameLevel(CharacterFrame:GetFrameLevel() + 1)
+    -- Behind the character frame, not in front. The panel's left edge is tucked
+    -- under the character frame's right border, and letting that border draw
+    -- over it makes the seam between the two the character frame's own artwork
+    -- - which matches by definition, instead of a second border in a slightly
+    -- different style butted up against the first.
+    panel:SetFrameLevel(math.max(0, CharacterFrame:GetFrameLevel() - 1))
     panel:EnableMouse(true)
     ns.ApplyChrome(panel)
     panel:Hide()

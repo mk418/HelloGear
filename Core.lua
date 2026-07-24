@@ -226,7 +226,9 @@ SlashCmdList["HELLOGEAR"] = function(msg)
         end
     elseif cmd == "dock" then
         local pixels = tonumber(rest)
-        if pixels then
+        if rest:lower() == "art" then
+            ns.Panel:ReportArtwork()
+        elseif pixels then
             ns.Panel:SetDockNudge(pixels)
         else
             ns.Panel:ReportGeometry()
