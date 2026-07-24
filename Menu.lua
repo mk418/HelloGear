@@ -49,10 +49,12 @@ for _, template in ipairs(BORDER_TEMPLATES) do
     end
 end
 
--- How far a panel has to overlap what it docks against for the two drawn
--- edges to meet. The nine-slice border sits nearly on the frame's bounds; the
--- fallback backdrop's edge texture is drawn well inside them.
-ns.CHROME_INSET = borderTemplate and 4 or 11
+-- How far a panel has to overlap what it docks against for the two drawn edges
+-- to meet. Both the border template and the fallback backdrop draw their edge
+-- about this far inside the frame's bounds - measured, not assumed: with the
+-- panel's frame at 355 and the character frame's visible edge at 359, the
+-- panel's border still started at 366.
+ns.CHROME_INSET = 11
 
 local function ApplyChrome(target)
     if not borderTemplate then
