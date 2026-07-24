@@ -161,7 +161,7 @@ function Import:Run(overwrite)
 
     Sets:Init()
     ns.Menu:Refresh()
-    ns.UI:Refresh()
+    ns.Panel:Refresh()
     return imported, skipped
 end
 
@@ -171,7 +171,7 @@ StaticPopupDialogs["HELLOGEAR_IMPORT"] = {
     button2 = NO,
     OnAccept = function()
         ns.Import:Run()
-        ns.UI:Toggle()
+        ns.Panel:Toggle()
     end,
     timeout = 0,
     whileDead = true,

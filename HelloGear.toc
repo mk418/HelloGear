@@ -15,5 +15,5 @@ Equip.lua
 Import.lua
 Menu.lua
 Minimap.lua
-SlotMenus.lua
-UI.lua
+Paperdoll.lua
+CharacterPanel.lua

@@ -17,10 +17,21 @@ Step 2 matters: ItemRack's sets live in *its* saved variables, which only load w
 
 ## Using it
 
-- **Minimap button** — click for the set menu, right-click for the set manager.
+Set management lives on the character sheet. The tab on the right edge opens a **Gear Sets** panel docked beside it: your sets, with Equip and Save, and a gear button on each row for renaming, the icon, and the helm/cloak toggles.
+
+- **Minimap button** — click for the quick set menu, right-click to open the panel.
 - **In the menu** — click a set to equip it, shift-click to toggle it, right-click to put back what it replaced. Right-click *Manage sets* to reveal sets marked hidden.
-- **Character sheet** — every slot gets a small arrow opening a list of the alternatives in your bags. Alt-click a slot does the same thing.
-- **Set manager** — the slot grid shows what each set manages. Click a slot to record what you're wearing, right-click to cycle it between *worn item*, *clear this slot*, and *leave alone*.
+- **In the panel** — click a row to select, double-click to equip, right-click to toggle.
+- **Editing a set** — hit *Edit slots* and the character sheet becomes the editor. Each slot shows what the selected set does with it, and clicking one cycles through the three states:
+
+| | |
+|---|---|
+| green border | the set's item, and you're wearing it |
+| yellow border | the set's item, not currently on |
+| red X | the set clears this slot |
+| dimmed | the set leaves this slot alone |
+
+- **Swapping one item** — outside edit mode, every slot has a small arrow opening a list of the alternatives in your bags. Alt-click a slot does the same thing.
 
 Sets are per character. A set only touches the slots it manages, so a one-slot set — swap in the disarm-resist gloves, put on the fire resist cloak — leaves the rest of your gear alone, and toggling it off restores exactly what it displaced.
 
@@ -34,7 +45,7 @@ Sets are per character. A set only touches the slots it manages, so a one-slot s
 /hg save <set>           save currently worn gear as <set>
 /hg delete <set>         delete a set
 /hg list                 list sets
-/hg manage               open the set manager
+/hg manage               open the gear set panel
 /hg import [force]       import sets from ItemRack
 /hg bind <1-6> <set>     assign a set to a key binding
 /hg config               open the options panel

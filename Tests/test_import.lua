@@ -78,7 +78,7 @@ ns.Config = {
     Get = function() return false end,
 }
 ns.Menu = { Refresh = function() end }
-ns.UI = { Refresh = function() end }
+ns.Panel = { Refresh = function() end }
 
 local function load_addon_file(name)
     local chunk, err = loadfile(ADDON .. "/" .. name)

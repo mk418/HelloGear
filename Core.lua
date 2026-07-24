@@ -66,8 +66,8 @@ ns:On("PLAYER_LOGIN", function()
     ns.Equip:Init()
     ns.Menu:Init()
     ns.Minimap:Init()
-    ns.SlotMenus:Init()
-    ns.UI:Init()
+    ns.Paperdoll:Init()
+    ns.Panel:Init()
     ns.Config:CreatePanel()
     -- ItemRack's saved variables only exist once ItemRack itself has loaded,
     -- which is after us (addons load alphabetically). PLAYER_LOGIN is the
@@ -140,7 +140,7 @@ local usage = {
     "  /hg save <set>          - save currently worn gear as <set>",
     "  /hg delete <set>        - delete a set",
     "  /hg list                - list sets",
-    "  /hg manage              - open the set manager",
+    "  /hg manage              - open the gear set panel on the character sheet",
     "  /hg import [force]      - import sets from ItemRack",
     "  /hg bind <1-6> <set>    - assign a set to a key binding",
     "  /hg config              - open the options panel",
@@ -169,12 +169,12 @@ SlashCmdList["HELLOGEAR"] = function(msg)
         else
             ns.Sets:SaveFromWorn(rest)
             ns:Print('saved worn gear as "%s"', rest)
-            ns.UI:Refresh()
+            ns.Panel:Refresh()
         end
     elseif cmd == "delete" then
         if ns.Sets:Delete(rest) then
             ns:Print('deleted "%s"', rest)
-            ns.UI:Refresh()
+            ns.Panel:Refresh()
         else
             ns:Print('no set named "%s"', rest)
         end
@@ -190,7 +190,7 @@ SlashCmdList["HELLOGEAR"] = function(msg)
             end
         end
     elseif cmd == "manage" then
-        ns.UI:Toggle()
+        ns.Panel:Toggle()
     elseif cmd == "import" then
         ns.Import:Run(rest:lower() == "force")
     elseif cmd == "bind" then

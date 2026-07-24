@@ -197,6 +197,41 @@ function Sets:IsEquipped(name, exact)
     return any
 end
 
+--------------------------------------------------------------------------
+-- Slot states
+--
+-- What a set does with one slot, and the cycle the paperdoll editor walks
+-- through. Kept here rather than in the UI so it can be tested without a
+-- character sheet to click on.
+--------------------------------------------------------------------------
+
+-- "worn"    managed, and the exact item is on right now
+-- "stored"  managed, but the item isn't currently worn
+-- "empty"   the set clears this slot
+-- "ignored" the set leaves this slot alone
+function Sets:SlotState(set, slotID)
+    local gearID = set.equip[slotID]
+    if gearID == nil then return "ignored" end
+    if gearID == ns.EMPTY then return "empty" end
+    if Items.MatchScore(gearID, Items.GetWorn(slotID)) == 3 then return "worn" end
+    return "stored"
+end
+
+-- ignored -> whatever is worn (or "clear it" if the slot is bare)
+-- worn/stored -> clear it
+-- empty -> ignored
+function Sets:CycleSlot(set, slotID)
+    local state = self:SlotState(set, slotID)
+    if state == "ignored" then
+        set.equip[slotID] = Items.GetWorn(slotID) or ns.EMPTY
+    elseif state == "empty" then
+        set.equip[slotID] = nil
+    else
+        set.equip[slotID] = ns.EMPTY
+    end
+    return self:SlotState(set, slotID)
+end
+
 -- Slots the set would change if equipped right now.
 function Sets:PendingSlots(name)
     local set = self:Get(self:Resolve(name) or "")

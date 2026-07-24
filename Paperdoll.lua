@@ -1,7 +1,7 @@
 local ADDON_NAME, ns = ...
 
-ns.SlotMenus = {}
-local SlotMenus = ns.SlotMenus
+ns.Paperdoll = {}
+local Paperdoll = ns.Paperdoll
 local Items = ns.Items
 local API = ns.API
 
@@ -12,7 +12,8 @@ local MAX_VISIBLE = 12
 local flyout, scroll, content
 local rows = {}
 local openSlot
-local widgets = {}   -- slotID -> {button, chevron, overlay}
+local widgets = {}      -- slotID -> {button, chevron, overlay}
+local editingSet        -- set being edited on the paperdoll, or nil
 
 --------------------------------------------------------------------------
 -- Candidates
@@ -65,7 +66,7 @@ local function GatherCandidates(slotID)
 end
 
 --------------------------------------------------------------------------
--- Flyout
+-- Swap flyout
 --------------------------------------------------------------------------
 
 local function CreateRow(index)
@@ -105,7 +106,7 @@ local function CreateRow(index)
         else
             ns.Equip:EquipItem(self.gearID, openSlot)
         end
-        SlotMenus:Close()
+        Paperdoll:Close()
     end)
 
     rows[index] = row
@@ -129,18 +130,18 @@ local function BuildFlyout()
     scroll:SetScrollChild(content)
 
     flyout:SetScript("OnShow", function()
-        if not SlotMenus.closer then
-            SlotMenus.closer = CreateFrame("Frame", nil, UIParent)
-            SlotMenus.closer:SetAllPoints()
-            SlotMenus.closer:SetFrameStrata("DIALOG")
-            SlotMenus.closer:SetFrameLevel(1)
-            SlotMenus.closer:EnableMouse(true)
-            SlotMenus.closer:SetScript("OnMouseDown", function() SlotMenus:Close() end)
+        if not Paperdoll.closer then
+            Paperdoll.closer = CreateFrame("Frame", nil, UIParent)
+            Paperdoll.closer:SetAllPoints()
+            Paperdoll.closer:SetFrameStrata("DIALOG")
+            Paperdoll.closer:SetFrameLevel(1)
+            Paperdoll.closer:EnableMouse(true)
+            Paperdoll.closer:SetScript("OnMouseDown", function() Paperdoll:Close() end)
         end
-        SlotMenus.closer:Show()
+        Paperdoll.closer:Show()
     end)
     flyout:SetScript("OnHide", function()
-        if SlotMenus.closer then SlotMenus.closer:Hide() end
+        if Paperdoll.closer then Paperdoll.closer:Hide() end
         openSlot = nil
     end)
 end
@@ -193,7 +194,7 @@ local function Populate(slotID)
     flyout:SetHeight(visible * ROW_HEIGHT + 42)
 end
 
-function SlotMenus:Open(slotID, anchor)
+function Paperdoll:Open(slotID, anchor)
     if not flyout then BuildFlyout() end
     openSlot = slotID
     Populate(slotID)
@@ -202,11 +203,11 @@ function SlotMenus:Open(slotID, anchor)
     flyout:Show()
 end
 
-function SlotMenus:Close()
+function Paperdoll:Close()
     if flyout then flyout:Hide() end
 end
 
-function SlotMenus:Toggle(slotID, anchor)
+function Paperdoll:Toggle(slotID, anchor)
     if flyout and flyout:IsShown() and openSlot == slotID then
         self:Close()
     else
@@ -214,23 +215,107 @@ function SlotMenus:Toggle(slotID, anchor)
     end
 end
 
-function SlotMenus:Refresh()
-    if flyout and flyout:IsShown() and openSlot then
-        Populate(openSlot)
+--------------------------------------------------------------------------
+-- Slot editing
+--
+-- While a set is being edited the overlays stop being a modifier-only
+-- affordance and take every click on the paperdoll. That is deliberate: the
+-- natural gesture on a slot is a left-click, and the default handler would
+-- have picked the item up before any hook of ours saw the click. Owning the
+-- mouse is the only way to make left-click mean "cycle this slot".
+--------------------------------------------------------------------------
+
+local STATE_COLOR = {
+    worn   = { 0.25, 0.85, 0.25 },  -- managed, and it's on right now
+    stored = { 1.00, 0.82, 0.20 },  -- managed, but not currently worn
+    empty  = { 0.90, 0.30, 0.30 },  -- the set clears this slot
+}
+
+local function SlotState(set, slotID)
+    return ns.Sets:SlotState(set, slotID)
+end
+
+local function UpdateEditOverlay(w)
+    local overlay = w.overlay
+    if not editingSet then
+        overlay.icon:Hide()
+        overlay.border:Hide()
+        overlay.dim:Hide()
+        overlay.cross:Hide()
+        return
+    end
+
+    local state = SlotState(editingSet, w.slotID)
+
+    if state == "ignored" then
+        overlay.icon:Hide()
+        overlay.border:Hide()
+        overlay.cross:Hide()
+        overlay.dim:Show()
+    elseif state == "empty" then
+        overlay.icon:Hide()
+        overlay.dim:Hide()
+        overlay.cross:Show()
+        overlay.border:SetVertexColor(unpack(STATE_COLOR.empty))
+        overlay.border:Show()
+    else
+        local _, texture = Items.GetInfo(editingSet.equip[w.slotID])
+        overlay.icon:SetTexture(texture)
+        overlay.icon:Show()
+        overlay.dim:Hide()
+        overlay.cross:Hide()
+        overlay.border:SetVertexColor(unpack(STATE_COLOR[state]))
+        overlay.border:Show()
     end
 end
 
+local function OverlayTooltip(self)
+    if not editingSet then
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetInventoryItem("player", self.slotID)
+        GameTooltip:Show()
+        return
+    end
+
+    local def = ns.SLOT_BY_ID[self.slotID]
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    GameTooltip:AddLine(def and def.label or "Slot", 1, 1, 1)
+
+    local state = SlotState(editingSet, self.slotID)
+    if state == "ignored" then
+        GameTooltip:AddLine("Left alone by this set", 0.6, 0.6, 0.6)
+    elseif state == "empty" then
+        GameTooltip:AddLine("Cleared by this set", 0.9, 0.4, 0.4)
+    else
+        local gearID = editingSet.equip[self.slotID]
+        GameTooltip:AddLine(Items.GetLink(gearID) or (Items.GetInfo(gearID)) or "?")
+        if state == "stored" then
+            GameTooltip:AddLine("Not currently worn", 1, 0.82, 0.2)
+        end
+    end
+
+    GameTooltip:AddLine(" ")
+    GameTooltip:AddLine("Click to cycle this slot:", 0.6, 0.6, 0.6)
+    GameTooltip:AddLine("what you're wearing / clear it / leave it alone", 0.6, 0.6, 0.6)
+    GameTooltip:Show()
+end
+
+function Paperdoll:SetEditMode(set)
+    editingSet = set
+    if set then self:Close() end
+    self:ApplyVisibility()
+end
+
+function Paperdoll:IsEditing()
+    return editingSet ~= nil
+end
+
+function Paperdoll:GetEditingSet()
+    return editingSet
+end
+
 --------------------------------------------------------------------------
--- Paperdoll attachments
---
--- Two ways in, because neither alone is good enough: a small arrow in the
--- corner of each slot so the feature is discoverable, and a modifier-click
--- for when you already know it's there.
---
--- The modifier click is done with an overlay that only takes the mouse while
--- the modifier is held. Hooking the slot button's own OnClick doesn't work -
--- the default handler runs first and has already picked the item up by the
--- time the hook sees the click.
+-- Attachments
 --------------------------------------------------------------------------
 
 local function ModifierHeld()
@@ -248,7 +333,7 @@ local function AttachTo(def)
     local chevron = CreateFrame("Button", nil, button)
     chevron:SetSize(12, 12)
     chevron:SetPoint("BOTTOMRIGHT", 2, -2)
-    chevron:SetFrameLevel(button:GetFrameLevel() + 2)
+    chevron:SetFrameLevel(button:GetFrameLevel() + 3)
     chevron:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Up")
     chevron:SetPushedTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Down")
     chevron:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight")
@@ -264,40 +349,85 @@ local function AttachTo(def)
         GameTooltip_Hide()
     end)
     chevron:SetScript("OnClick", function()
-        SlotMenus:Toggle(def.id, button)
+        Paperdoll:Toggle(def.id, button)
     end)
 
     local overlay = CreateFrame("Button", nil, button)
     overlay:SetAllPoints()
-    overlay:SetFrameLevel(button:GetFrameLevel() + 1)
+    overlay:SetFrameLevel(button:GetFrameLevel() + 2)
     overlay:EnableMouse(false)
     overlay:Hide()
-    overlay:SetScript("OnEnter", function()
-        GameTooltip:SetOwner(button, "ANCHOR_RIGHT")
-        GameTooltip:SetInventoryItem("player", def.id)
-        GameTooltip:Show()
-    end)
+    overlay.slotID = def.id
+
+    -- The set's item is drawn over the real one rather than by retexturing the
+    -- slot button itself: PaperDollItemSlotButton_Update would stomp any change
+    -- we made there on the next inventory event.
+    overlay.icon = overlay:CreateTexture(nil, "ARTWORK")
+    overlay.icon:SetAllPoints()
+    overlay.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+    overlay.icon:Hide()
+
+    overlay.dim = overlay:CreateTexture(nil, "OVERLAY")
+    overlay.dim:SetAllPoints()
+    overlay.dim:SetColorTexture(0, 0, 0, 0.6)
+    overlay.dim:Hide()
+
+    overlay.cross = overlay:CreateTexture(nil, "OVERLAY")
+    overlay.cross:SetSize(22, 22)
+    overlay.cross:SetPoint("CENTER")
+    overlay.cross:SetTexture("Interface\\Buttons\\UI-GroupLoot-Pass-Up")
+    overlay.cross:Hide()
+
+    overlay.border = overlay:CreateTexture(nil, "OVERLAY", nil, 1)
+    overlay.border:SetPoint("TOPLEFT", -2, 2)
+    overlay.border:SetPoint("BOTTOMRIGHT", 2, -2)
+    overlay.border:SetTexture("Interface\\Buttons\\UI-Quickslot-Depress")
+    overlay.border:Hide()
+
+    overlay:SetScript("OnEnter", OverlayTooltip)
     overlay:SetScript("OnLeave", GameTooltip_Hide)
-    overlay:SetScript("OnClick", function()
-        SlotMenus:Toggle(def.id, button)
+    overlay:SetScript("OnClick", function(self)
+        if editingSet then
+            ns.Sets:CycleSlot(editingSet, self.slotID)
+            UpdateEditOverlay(widgets[self.slotID])
+            ns.Panel:Refresh()
+            OverlayTooltip(self)
+        else
+            Paperdoll:Toggle(self.slotID, button)
+        end
     end)
 
-    widgets[def.id] = { button = button, chevron = chevron, overlay = overlay }
+    widgets[def.id] = { button = button, chevron = chevron, overlay = overlay, slotID = def.id }
 end
 
-function SlotMenus:ApplyVisibility()
+function Paperdoll:ApplyVisibility()
     local enabled = ns.Config:Get("slotMenus")
-    local chevrons = enabled and ns.Config:Get("slotMenuChevrons")
-    local overlayOn = enabled and ModifierHeld()
+    local editing = editingSet ~= nil
+    -- While editing, the arrows would offer a second, conflicting meaning for
+    -- clicking a slot, so they go away.
+    local chevrons = enabled and not editing and ns.Config:Get("slotMenuChevrons")
+    local overlayOn = editing or (enabled and ModifierHeld())
+
     for _, w in pairs(widgets) do
         w.chevron:SetShown(chevrons and true or false)
         w.overlay:EnableMouse(overlayOn and true or false)
         w.overlay:SetShown(overlayOn and true or false)
+        UpdateEditOverlay(w)
     end
-    if not enabled then self:Close() end
+
+    if not enabled and not editing then self:Close() end
 end
 
-function SlotMenus:Init()
+function Paperdoll:Refresh()
+    if flyout and flyout:IsShown() and openSlot then
+        Populate(openSlot)
+    end
+    if editingSet then
+        for _, w in pairs(widgets) do UpdateEditOverlay(w) end
+    end
+end
+
+function Paperdoll:Init()
     for _, def in ipairs(ns.SLOTS) do
         AttachTo(def)
     end
@@ -305,9 +435,9 @@ function SlotMenus:Init()
     -- the character sheet is actually on screen.
     ns:On("MODIFIER_STATE_CHANGED", function()
         if CharacterFrame and CharacterFrame:IsShown() then
-            SlotMenus:ApplyVisibility()
+            Paperdoll:ApplyVisibility()
         end
     end)
-    ns:On("PLAYER_REGEN_DISABLED", function() SlotMenus:Close() end)
+    ns:On("PLAYER_REGEN_DISABLED", function() Paperdoll:Close() end)
     self:ApplyVisibility()
 end

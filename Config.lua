@@ -9,6 +9,8 @@ local accountDefaults = {
     slotMenus = true,
     slotMenuModifier = "ALT",  -- ALT | CTRL | SHIFT | NONE
     slotMenuChevrons = true,
+    -- Gear set panel docked to the character sheet
+    panelShown = true,
     -- Chat feedback
     announceSwaps = true,
     -- Claim the bare EquipSet/ToggleSet globals for macro compatibility
@@ -114,11 +116,11 @@ function Config:CreatePanel()
 
     CheckBox("Paperdoll slot menus", "slotMenus",
         "Adds a menu to each character-sheet slot listing every alternative in your bags.",
-        function() ns.SlotMenus:ApplyVisibility() end)
+        function() ns.Paperdoll:ApplyVisibility() end)
 
     CheckBox("Show slot menu arrows on hover", "slotMenuChevrons",
         "Uncheck to open slot menus only with the modifier click.",
-        function() ns.SlotMenus:ApplyVisibility() end)
+        function() ns.Paperdoll:ApplyVisibility() end)
 
     CheckBox("Announce swaps in chat", "announceSwaps")
 
@@ -142,7 +144,7 @@ function Config:CreatePanel()
         end
         Config:Set("slotMenuModifier", modifiers[index])
         UpdateModButton()
-        ns.SlotMenus:ApplyVisibility()
+        ns.Paperdoll:ApplyVisibility()
     end)
     modButton:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
@@ -159,7 +161,7 @@ function Config:CreatePanel()
     help:SetText(
         "Slash commands:\n" ..
         "  /hg - open the set menu\n" ..
-        "  /hg manage - open the set manager\n" ..
+        "  /hg manage - open the gear set panel\n" ..
         "  /hg equip <set> / toggle <set> / save <set>\n" ..
         "  /hg import - import sets from ItemRack\n" ..
         "  /hg bind <1-6> <set> - assign a set to a key binding\n" ..

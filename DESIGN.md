@@ -27,7 +27,7 @@ That single break isn't worth a fork. The interesting part is that the surroundi
 - **Equipping** — one-click equip, toggle (equip / put back what it displaced), single-item swaps.
 - **ItemRack import** — sets, icons, hidden flags, helm/cloak toggles, deliberate-empty slots.
 - **Set menu** — minimap button opens a list; click equips, shift-click toggles, right-click restores.
-- **Set manager** — window with the set list, a 20-slot grid, and the cosmetic toggles.
+- **Character-sheet panel** — a sidebar tab on the character frame opens a docked gear-set panel, and the paperdoll itself becomes the set editor.
 - **Paperdoll slot menus** — every character-sheet slot gets a menu of the alternatives in your bags, with cooldown swirls.
 - **Key bindings** — six assignable set slots plus a menu toggle.
 - **Macro API** — `HelloGear.EquipSet("name")`, and the bare `EquipSet()` global ItemRack-era macros expect.
@@ -56,8 +56,9 @@ HelloGear/
 ├── Import.lua          -- ItemRack import and snapshotting
 ├── Menu.lua            -- the quick set menu (and shared popup chrome)
 ├── Minimap.lua         -- minimap button
-├── SlotMenus.lua       -- character-sheet slot flyouts
-├── UI.lua              -- set manager window
+├── Paperdoll.lua       -- everything attached to character-sheet slots:
+│                          swap flyouts and the set-editing overlays
+├── CharacterPanel.lua  -- the docked gear-set panel and its sidebar tab
 └── Tests/              -- headless harnesses; not listed in the TOC
 ```
 
@@ -129,6 +130,26 @@ Rings and trinkets that are simply in each other's slots are handled by a direct
 ### In combat
 
 Era permits gear swaps in combat, so the engine doesn't gate on it — no combat queue, no deferred swaps. `PLAYER_REGEN_ENABLED` is registered anyway, so a job that stalls mid-fight resumes when combat drops.
+
+---
+
+## The character-sheet integration
+
+Set management lives on the character sheet rather than in a window of its own. A sidebar tab opens a panel docked to the right of the frame, and the paperdoll itself becomes the set editor.
+
+**Why docked outside rather than inside.** Retail has a wide character frame with a dedicated right-hand column, which is where its equipment manager lives. Classic's frame has no such column — a panel inside it would cover the model and the slot buttons. Since the whole point is to click those slots while editing, the panel goes outside. The right edge is free in practice: CharacterStatsClassic overlays *inside* the frame, and DragonflightUI's own equipment manager only exists when DragonflightUI is enabled.
+
+**Anchoring.** `CharacterFrame` is considerably wider than its artwork, so its right edge is nowhere near the visible one. The sidebar tab anchors off `CharacterFrameCloseButton`, which sits at the top-right of the art and therefore tracks it, and the panel anchors off the tab — so the two stay a fixed distance apart regardless of the frame's padding.
+
+**Why the overlays own the mouse while editing.** Clicking a paperdoll slot normally picks the item up, and that handler runs before any hook of ours sees the click. There's no way to hook it and cancel. So each slot carries a transparent overlay button that takes the mouse only when it should: while a modifier is held (for the swap flyout) or while a set is being edited. In edit mode the overlay also draws the set's item over the real one — retexturing the slot button itself would be undone by `PaperDollItemSlotButton_Update` on the next inventory event.
+
+Edit mode is explicitly entered and exited rather than being implied by having a set selected. While it's on, left-clicking a slot means "cycle what this set does here" and nothing else — the swap arrows hide so there's only ever one meaning for a click.
+
+**Where the panel follows.** Switching to the Reputation or Skills tab leaves `CharacterFrame` shown but hides `PaperDollFrame`, so the panel hooks `PaperDollFrame` rather than its own parent. That hide is deliberately not recorded as "the user closed the panel", so it comes back when you switch to the paperdoll again.
+
+**What didn't fit.** A 200px column has room for the set list and Equip/Save. Renaming, the icon, the helm/cloak toggles and the menu-visibility flag are all things you set once and never touch again, so they moved behind a gear button on each row.
+
+Slot state and the edit cycle live in `Sets.lua`, not in the UI file, so they can be tested without a character sheet to click on.
 
 ---
 

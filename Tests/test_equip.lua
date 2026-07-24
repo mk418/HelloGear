@@ -254,8 +254,8 @@ ns.Config = {
     Get = function(_, key) return key ~= "announceSwaps" end,
 }
 ns.Menu = { Refresh = function() end }
-ns.UI = { Refresh = function() end }
-ns.SlotMenus = { Refresh = function() end }
+ns.Panel = { Refresh = function() end }
+ns.Paperdoll = { Refresh = function() end }
 
 local function load_addon_file(name)
     local chunk, err = loadfile(ADDON .. "/" .. name)
@@ -616,6 +616,44 @@ scenario("full 15-slot set swap in one go", function()
         check(world.worn[slot] == wanted[slot], ("slot %d holds the right item"):format(slot))
     end
     check(Sets:IsEquipped("Everything", true), "exact match after swap")
+end)
+
+------------------------------------------------------------------
+scenario("paperdoll slot editing cycles through the three states", function()
+    local helm = G(100)
+    world.worn[1] = helm
+    local set = Sets:Create("Edit", { equip = {} })
+
+    check(Sets:SlotState(set, 1) == "ignored", "starts out unmanaged")
+
+    check(Sets:CycleSlot(set, 1) == "worn", "first click records what's worn")
+    check(set.equip[1] == helm, "stored the worn item")
+
+    check(Sets:CycleSlot(set, 1) == "empty", "second click clears the slot")
+    check(set.equip[1] == ns.EMPTY, "stored the empty sentinel")
+
+    check(Sets:CycleSlot(set, 1) == "ignored", "third click goes back to unmanaged")
+    check(set.equip[1] == nil, "slot dropped from the set")
+end)
+
+------------------------------------------------------------------
+scenario("editing a bare slot skips straight to clear", function()
+    -- Nothing worn in the off hand: there is no item to record, so the only
+    -- meaningful thing the first click can mean is "this set clears it".
+    local set = Sets:Create("Edit", { equip = {} })
+    check(Sets:CycleSlot(set, 17) == "empty", "bare slot becomes a clear")
+    check(Sets:CycleSlot(set, 17) == "ignored", "and then unmanaged")
+end)
+
+------------------------------------------------------------------
+scenario("a managed slot reads as stored when its item is off", function()
+    local worn, other = G(100), G(111)
+    world.worn[1] = worn
+    local set = Sets:Create("Edit", { equip = { [1] = other } })
+    check(Sets:SlotState(set, 1) == "stored", "set item is not the one worn")
+
+    world.worn[1] = other
+    check(Sets:SlotState(set, 1) == "worn", "reads as worn once it's on")
 end)
 
 ------------------------------------------------------------------

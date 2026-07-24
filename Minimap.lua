@@ -67,7 +67,7 @@ function Minimap_:Init()
 
     button:SetScript("OnClick", function(self, click)
         if click == "RightButton" then
-            ns.UI:Toggle()
+            ns.Panel:Toggle()
         else
             ns.Menu:Toggle(self)
         end

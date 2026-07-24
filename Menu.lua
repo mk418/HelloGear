@@ -137,7 +137,7 @@ function Menu:Init()
             Menu:SetShowHidden(not showHidden)
         else
             Menu:Hide()
-            ns.UI:Toggle()
+            ns.Panel:Toggle()
         end
     end)
     footer:SetScript("OnEnter", function(self)

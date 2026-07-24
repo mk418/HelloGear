@@ -273,8 +273,8 @@ local function FinishJob(job, stalled)
     end
 
     ns.Menu:Refresh()
-    ns.UI:Refresh()
-    ns.SlotMenus:Refresh()
+    ns.Panel:Refresh()
+    ns.Paperdoll:Refresh()
 end
 
 local function Step()
@@ -374,7 +374,7 @@ function Equip:EquipSet(name)
         HelloGearCharDB.currentSet = resolved
         Announce('"%s" already equipped', resolved)
         ns.Menu:Refresh()
-        ns.UI:Refresh()
+        ns.Panel:Refresh()
         return true
     end
 
