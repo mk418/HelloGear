@@ -412,9 +412,13 @@ local CLOSE_TO_EDGE = 3
 -- close button, which Blizzard pins to the artwork's top-right corner; the
 -- slot-column derivation is the fallback for a frame without one.
 local function VisibleCorner()
+    -- Only the horizontal comes from the close button. The artwork *is* flush
+    -- with CharacterFrame's top - measuring the close button for the top
+    -- pushed the panel a dozen pixels above the character frame, and the
+    -- resulting height stopped matching the 424 the artwork actually is.
     local close = _G.CharacterFrameCloseButton
-    if close and close:GetRight() and close:GetTop() then
-        return close:GetRight() + CLOSE_TO_EDGE, close:GetTop() + CLOSE_TO_EDGE
+    if close and close:GetRight() then
+        return close:GetRight() + CLOSE_TO_EDGE, CharacterFrame:GetTop()
     end
     local left, right = ColumnEdgeSlots()
     local inset = (left and right)
@@ -538,9 +542,11 @@ function Panel:ReportArtwork()
                     local texture = region:GetTexture()
                     if atlas or texture then
                         shown = shown + 1
-                        ns:Print("  %s%s  [%s]",
-                            atlas and "atlas:" or "", tostring(atlas or texture),
-                            tostring(region:GetDrawLayer()))
+                        local point, _, relPoint, ox, oy = region:GetPoint(1)
+                        ns:Print("  %s  %.0fx%.0f  %s->%s %.0f,%.0f",
+                            tostring(atlas or texture),
+                            region:GetWidth() or 0, region:GetHeight() or 0,
+                            tostring(point), tostring(relPoint), ox or 0, oy or 0)
                     end
                 end
             end
