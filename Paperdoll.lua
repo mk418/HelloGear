@@ -7,11 +7,12 @@ local API = ns.API
 
 local ROW_HEIGHT = 22
 local WIDTH = 224
-local INSET = 15   -- clear of the backdrop's 12px border
-local ROW_WIDTH = WIDTH - INSET * 2
+local INSET = 15         -- clear of the border
+local SCROLLBAR_ROOM = 22  -- the scrollbar hangs outside the scroll frame
+local ROW_WIDTH = WIDTH - INSET * 2 - SCROLLBAR_ROOM
 local MAX_VISIBLE = 12
 
-local flyout, scroll, content
+local flyout, scroll, content, scrollBar
 local rows = {}
 local openSlot
 local openMode          -- "equip" (wear it now) or "assign" (put it in the set)
@@ -149,6 +150,7 @@ local function BuildFlyout()
     content = CreateFrame("Frame", nil, scroll)
     content:SetSize(ROW_WIDTH, 1)
     scroll:SetScrollChild(content)
+    scrollBar = _G[scroll:GetName() .. "ScrollBar"]
 
     flyout:SetScript("OnShow", function()
         if not Paperdoll.closer then
@@ -246,6 +248,7 @@ local function Populate(slotID, mode)
     local visible = math.min(math.max(index, 1), MAX_VISIBLE)
     content:SetHeight(math.max(index * ROW_HEIGHT, 1))
     scroll:SetHeight(visible * ROW_HEIGHT)
+    if scrollBar then scrollBar:SetShown(index > MAX_VISIBLE) end
     flyout:SetHeight(visible * ROW_HEIGHT + INSET * 2 + 20)
 end
 

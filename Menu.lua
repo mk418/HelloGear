@@ -6,12 +6,16 @@ local Items = ns.Items
 local Sets = ns.Sets
 
 local ROW_HEIGHT = 20
-local WIDTH = 190
-local INSET = 15   -- clear of the backdrop's 12px border
-local ROW_WIDTH = WIDTH - INSET * 2
+local WIDTH = 210
+local INSET = 15         -- clear of the border
+-- UIPanelScrollFrameTemplate hangs its scrollbar OUTSIDE the scroll frame's
+-- right edge, so the rows have to give up that much or the bar lands on the
+-- border - or past it, outside the panel entirely.
+local SCROLLBAR_ROOM = 22
+local ROW_WIDTH = WIDTH - INSET * 2 - SCROLLBAR_ROOM
 local MAX_VISIBLE = 14
 
-local frame, scroll, content, footer
+local frame, scroll, content, scrollBar, footer
 local rows = {}
 local showHidden = false
 
@@ -21,10 +25,13 @@ local showHidden = false
 -- UI codebase, and this needs about twenty lines of frame anyway.
 --------------------------------------------------------------------------
 
--- Blizzard's stock dialog backdrop, at the numbers it's drawn for. The edge
--- texture's corner pieces only read as the chamfered "dulled point" the rest
--- of the UI has at the full 32px edge size; shrink it and the corners square
--- off into something that looks like a different UI.
+-- 1.15.9 put Classic Era on the modern UI, and the character frame with it:
+-- it's the dark nine-slice chrome now, not the old tan parchment. So
+-- UI-DialogBox-Border was never going to match it at any edge size - it's the
+-- wrong frame entirely. Borrow the same border the rest of that UI uses, and
+-- keep the backdrop only for a client that doesn't have it.
+local BORDER_TEMPLATES = { "DialogBorderDarkTemplate", "DialogBorderTemplate" }
+
 ns.BACKDROP = {
     bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background-Dark",
     edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
@@ -32,9 +39,41 @@ ns.BACKDROP = {
     insets = { left = 11, right = 12, top = 12, bottom = 11 },
 }
 
+local borderTemplate
+for _, template in ipairs(BORDER_TEMPLATES) do
+    local ok, probe = pcall(CreateFrame, "Frame", nil, UIParent, template)
+    if ok and probe then
+        probe:Hide()
+        borderTemplate = template
+        break
+    end
+end
+
+-- How far a panel has to overlap what it docks against for the two drawn
+-- edges to meet. The nine-slice border sits nearly on the frame's bounds; the
+-- fallback backdrop's edge texture is drawn well inside them.
+ns.CHROME_INSET = borderTemplate and 4 or 11
+
+local function ApplyChrome(target)
+    if not borderTemplate then
+        target:SetBackdrop(ns.BACKDROP)
+        return
+    end
+    local bg = target:CreateTexture(nil, "BACKGROUND")
+    bg:SetPoint("TOPLEFT", 4, -4)
+    bg:SetPoint("BOTTOMRIGHT", -4, 4)
+    bg:SetColorTexture(0.04, 0.04, 0.05, 0.9)
+    target.bg = bg
+
+    local border = CreateFrame("Frame", nil, target, borderTemplate)
+    border:SetAllPoints(target)
+    target.chrome = border
+end
+ns.ApplyChrome = ApplyChrome
+
 local function CreatePanel(name, parent)
     local f = CreateFrame("Frame", name, parent or UIParent, "BackdropTemplate")
-    f:SetBackdrop(ns.BACKDROP)
+    ApplyChrome(f)
     f:SetFrameStrata("DIALOG")
     -- Explicit level so the click-away catcher (level 1, same strata) is
     -- always underneath rather than depending on creation order.
@@ -129,6 +168,7 @@ function Menu:Init()
     content = CreateFrame("Frame", nil, scroll)
     content:SetSize(ROW_WIDTH, 1)
     scroll:SetScrollChild(content)
+    scrollBar = _G[scroll:GetName() .. "ScrollBar"]
 
     footer = CreateFrame("Button", nil, frame)
     footer:SetSize(ROW_WIDTH, ROW_HEIGHT)
@@ -215,6 +255,7 @@ function Menu:Populate()
     local visible = math.min(math.max(#names, 1), MAX_VISIBLE)
     content:SetHeight(math.max(#names * ROW_HEIGHT, 1))
     scroll:SetHeight(visible * ROW_HEIGHT)
+    if scrollBar then scrollBar:SetShown(#names > MAX_VISIBLE) end
     frame:SetHeight(visible * ROW_HEIGHT + ROW_HEIGHT + INSET * 2 + 8)
 end
 

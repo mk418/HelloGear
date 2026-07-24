@@ -7,19 +7,17 @@ local Sets = ns.Sets
 
 local PANEL_WIDTH = 214
 local PANEL_HEIGHT = 400   -- provisional; FitToFrame anchors top and bottom
-local PANEL_MARGIN = 12    -- inset from the artwork's top and bottom edges
+-- Zero: the panel spans the artwork's full height so its top and bottom edges
+-- line up with the character frame's rather than floating inside them.
+local PANEL_MARGIN = 0
 local ROW_HEIGHT = 36
 local CONTENT_LEFT = 16    -- clear of the backdrop's 12px border
-local CONTENT_RIGHT = -28  -- border plus room for the scrollbar
+local CONTENT_RIGHT = -34  -- border, plus room for the scrollbar inside it
 local ROW_WIDTH = PANEL_WIDTH + CONTENT_RIGHT - CONTENT_LEFT
 local BUTTON_SIZE = 26
 
--- The backdrop's edge texture is drawn inside the frame's bounds, so the panel
--- has to overlap the character frame by this much for the two drawn edges to
--- meet. Tracks ns.BACKDROP's left inset.
-local BACKDROP_EDGE_INSET = 11
 
-local panel, toggle, scroll, content, statusText, editButton, equipButton, saveButton
+local panel, toggle, scroll, content, scrollBar, statusText, editButton, equipButton, saveButton
 local rows = {}
 local options          -- the per-set options popout
 local selected
@@ -431,7 +429,7 @@ local function FitToFrame()
     local inset = ArtInset() or DEFAULT_ART_INSET
     local artRight = CharacterFrame:GetRight() + inset
     local x = (artRight - CharacterFrame:GetLeft())
-        - BACKDROP_EDGE_INSET
+        - ns.CHROME_INSET
         + (ns.Config:Get("dockNudge") or 0)
 
     local tab1 = _G.CharacterFrameTab1
@@ -518,7 +516,7 @@ local function BuildPanel()
     panel:SetPoint("TOPLEFT", CharacterFrame, "TOPRIGHT", -45, -12)
     panel:SetFrameLevel(CharacterFrame:GetFrameLevel() + 1)
     panel:EnableMouse(true)
-    panel:SetBackdrop(ns.BACKDROP)
+    ns.ApplyChrome(panel)
     panel:Hide()
 
     local title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
@@ -563,6 +561,7 @@ local function BuildPanel()
     content = CreateFrame("Frame", nil, scroll)
     content:SetSize(ROW_WIDTH, 1)
     scroll:SetScrollChild(content)
+    scrollBar = _G[scroll:GetName() .. "ScrollBar"]
 
     editButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
     editButton:SetSize(ROW_WIDTH, 22)
@@ -724,7 +723,12 @@ function Panel:Refresh()
         row:Show()
     end
     for i = #names + 1, #rows do rows[i]:Hide() end
-    content:SetHeight(math.max(#names * ROW_HEIGHT, 1))
+
+    local contentHeight = #names * ROW_HEIGHT
+    content:SetHeight(math.max(contentHeight, 1))
+    if scrollBar then
+        scrollBar:SetShown(contentHeight > scroll:GetHeight() + 1)
+    end
 
     local editing = ns.Paperdoll:IsEditing()
     editButton:SetText(editing and "|cffffd200Done editing slots|r" or "Edit slots")
