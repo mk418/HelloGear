@@ -8,7 +8,8 @@ local Sets = ns.Sets
 local PANEL_WIDTH = 214
 local PANEL_HEIGHT = 400   -- provisional; FitToFrame anchors top and bottom
 local ROW_HEIGHT = 36
-local CONTENT_LEFT = 16    -- clear of the backdrop's 12px border
+local INTERIOR_INSET = 11  -- width of the borrowed border art
+local CONTENT_LEFT = 16    -- clear of the border
 local CONTENT_RIGHT = -34  -- border, plus room for the scrollbar inside it
 local ROW_WIDTH = PANEL_WIDTH + CONTENT_RIGHT - CONTENT_LEFT
 local BUTTON_SIZE = 26
@@ -644,6 +645,20 @@ local function BuildPanel()
             piece.texture = texture
             panel.art[#panel.art + 1] = piece
         end
+
+        -- Borrowing the artwork borrows the paperdoll's interior with it -
+        -- slot recesses, inset shading, the lot - which is right for the
+        -- border and wrong for the middle of a set list. Everything inside
+        -- the border gets covered over; only the edges and corners show.
+        --
+        -- Left inset is zero: that edge is the character frame's own border,
+        -- drawn by the character frame itself, so the fill runs right up to
+        -- the seam.
+        local fill = panel:CreateTexture(nil, "ARTWORK", nil, -8)
+        fill:SetPoint("TOPLEFT", 0, -INTERIOR_INSET)
+        fill:SetPoint("BOTTOMRIGHT", -INTERIOR_INSET, INTERIOR_INSET)
+        fill:SetColorTexture(0.10, 0.09, 0.08, 1)
+        panel.fill = fill
     else
         -- No artwork to borrow; fall back to the generic chrome.
         ns.ApplyChrome(panel)
