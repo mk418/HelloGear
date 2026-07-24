@@ -143,6 +143,7 @@ local usage = {
     "  /hg manage              - open the gear set panel on the character sheet",
     "  /hg import [force]      - import sets from ItemRack",
     "  /hg bind <1-6> <set>    - assign a set to a key binding",
+    "  /hg dock [pixels]       - report or nudge where the panel docks",
     "  /hg config              - open the options panel",
     "  /hg reset               - wipe all HelloGear data and reload",
 }
@@ -203,6 +204,13 @@ SlashCmdList["HELLOGEAR"] = function(msg)
         else
             ns.Config:GetCharTable("bindings")[index] = name
             ns:Print('binding %d equips "%s" (assign a key in Esc -> Key Bindings -> HelloGear)', index, name)
+        end
+    elseif cmd == "dock" then
+        local pixels = tonumber(rest)
+        if pixels then
+            ns.Panel:SetDockNudge(pixels)
+        else
+            ns.Panel:ReportGeometry()
         end
     elseif cmd == "config" then
         ns.Config:OpenPanel()

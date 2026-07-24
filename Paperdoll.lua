@@ -12,6 +12,7 @@ local MAX_VISIBLE = 12
 local flyout, scroll, content
 local rows = {}
 local openSlot
+local openMode          -- "equip" (wear it now) or "assign" (put it in the set)
 local widgets = {}      -- slotID -> {button, chevron, overlay}
 local editingSet        -- set being edited on the paperdoll, or nil
 
@@ -92,6 +93,12 @@ local function CreateRow(index)
     row.highlight:SetAllPoints()
     row.highlight:SetColorTexture(1, 1, 1, 0.12)
 
+    row.check = row:CreateTexture(nil, "OVERLAY")
+    row.check:SetSize(16, 16)
+    row.check:SetPoint("RIGHT", -2, 0)
+    row.check:SetTexture("Interface\\Buttons\\UI-CheckBox-Check")
+    row.check:Hide()
+
     row:SetScript("OnEnter", function(self)
         if not self.gearID then return end
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
@@ -101,7 +108,15 @@ local function CreateRow(index)
     end)
     row:SetScript("OnLeave", GameTooltip_Hide)
     row:SetScript("OnClick", function(self)
-        if self.gearID == ns.EMPTY then
+        if openMode == "assign" then
+            if editingSet then
+                -- self.gearID is ns.EMPTY for the "no item" row, which is
+                -- exactly what the set stores for "clear this slot".
+                ns.Sets:SetSlot(editingSet, openSlot, self.gearID)
+                Paperdoll:Refresh()
+                ns.Panel:Refresh()
+            end
+        elseif self.gearID == ns.EMPTY then
             ns.Equip:ClearSlot(openSlot)
         else
             ns.Equip:EquipItem(self.gearID, openSlot)
@@ -146,46 +161,84 @@ local function BuildFlyout()
     end)
 end
 
-local function Populate(slotID)
+local function QualityColor(quality)
+    local color = quality and ITEM_QUALITY_COLORS[quality]
+    return color and color.hex or "|cffffffff"
+end
+
+local function Populate(slotID, mode)
     local def = ns.SLOT_BY_ID[slotID]
+    local label = def and def.label or "Slot"
     local candidates = GatherCandidates(slotID)
     local worn = Items.GetWorn(slotID)
+    local assigned = mode == "assign" and editingSet and editingSet.equip[slotID] or nil
 
-    flyout.title:SetText("|cffffd200" .. (def and def.label or "Slot") .. "|r")
+    local index, seen = 0, {}
+    local function AddRow(gearID, texture, text, baseID)
+        if gearID ~= ns.EMPTY and seen[gearID] then return end
+        seen[gearID] = true
 
-    local index = 0
-
-    if worn then
         index = index + 1
         local row = rows[index] or CreateRow(index)
-        row.gearID = ns.EMPTY
-        row.icon:SetTexture("Interface\\Buttons\\UI-GroupLoot-Pass-Up")
-        row.cooldown:Clear()
-        row.label:SetText("|cffff8080Take off|r")
-        row:Show()
-    end
+        row.gearID = gearID
+        row.icon:SetTexture(texture)
+        row.label:SetText(text)
 
-    for _, candidate in ipairs(candidates) do
-        index = index + 1
-        local row = rows[index] or CreateRow(index)
-        row.gearID = candidate.gearID
-        row.icon:SetTexture(candidate.texture)
-        local color = ITEM_QUALITY_COLORS[candidate.quality]
-        row.label:SetText((color and color.hex or "|cffffffff") .. candidate.name .. "|r")
-
-        local start, duration = API.GetItemCooldown(candidate.baseID)
+        -- Not `baseID and API.GetItemCooldown(baseID)`: `and` yields only the
+        -- first return value, which would silently drop the duration.
+        local start, duration
+        if baseID then start, duration = API.GetItemCooldown(baseID) end
         if start and duration and duration > 0 then
             row.cooldown:SetCooldown(start, duration)
         else
             row.cooldown:Clear()
         end
+
+        row.check:SetShown(mode == "assign" and gearID == assigned)
         row:Show()
+    end
+
+    if mode == "assign" then
+        flyout.title:SetText(("|cffffd200%s|r  |cff808080%s|r")
+            :format(label, editingSet and editingSet.name or ""))
+        -- Always offered: a set can deliberately strip a slot, and that's not
+        -- the same as leaving the slot alone (which is the right-click).
+        AddRow(ns.EMPTY, "Interface\\Buttons\\UI-GroupLoot-Pass-Up", "|cffff8080No item|r")
+    else
+        flyout.title:SetText("|cffffd200" .. label .. "|r")
+        if worn then
+            AddRow(ns.EMPTY, "Interface\\Buttons\\UI-GroupLoot-Pass-Up", "|cffff8080Take off|r")
+        end
+    end
+
+    -- What you're wearing is a legitimate choice for a set; for an equip it
+    -- would be a no-op, so it's only offered in assign mode.
+    if mode == "assign" and worn then
+        local name, texture, _, quality = Items.GetInfo(worn)
+        AddRow(worn, texture,
+            QualityColor(quality) .. (name or "...") .. "|r |cff808080(worn)|r",
+            Items.BaseID(worn))
+    end
+
+    for _, candidate in ipairs(candidates) do
+        AddRow(candidate.gearID, candidate.texture,
+            QualityColor(candidate.quality) .. candidate.name .. "|r",
+            candidate.baseID)
+    end
+
+    -- The set can point at gear that's in the bank, or gone. Show it anyway,
+    -- so it can be seen for what it is and replaced.
+    if assigned and assigned ~= ns.EMPTY and not seen[assigned] then
+        local name, texture, _, quality = Items.GetInfo(assigned)
+        AddRow(assigned, texture,
+            QualityColor(quality) .. (name or "...") .. "|r |cff808080(not carried)|r",
+            Items.BaseID(assigned))
     end
 
     for i = index + 1, #rows do rows[i]:Hide() end
 
     if index == 0 then
-        flyout.title:SetText("|cffffd200" .. (def and def.label or "Slot") .. "|r  |cff808080nothing to swap in|r")
+        flyout.title:SetText(("|cffffd200%s|r  |cff808080nothing to swap in|r"):format(label))
     end
 
     local visible = math.min(math.max(index, 1), MAX_VISIBLE)
@@ -194,10 +247,11 @@ local function Populate(slotID)
     flyout:SetHeight(visible * ROW_HEIGHT + 42)
 end
 
-function Paperdoll:Open(slotID, anchor)
+function Paperdoll:Open(slotID, anchor, mode)
     if not flyout then BuildFlyout() end
     openSlot = slotID
-    Populate(slotID)
+    openMode = mode or "equip"
+    Populate(slotID, openMode)
     flyout:ClearAllPoints()
     flyout:SetPoint("TOPLEFT", anchor, "TOPRIGHT", 4, 0)
     flyout:Show()
@@ -207,11 +261,11 @@ function Paperdoll:Close()
     if flyout then flyout:Hide() end
 end
 
-function Paperdoll:Toggle(slotID, anchor)
+function Paperdoll:Toggle(slotID, anchor, mode)
     if flyout and flyout:IsShown() and openSlot == slotID then
         self:Close()
     else
-        self:Open(slotID, anchor)
+        self:Open(slotID, anchor, mode)
     end
 end
 
@@ -295,8 +349,10 @@ local function OverlayTooltip(self)
     end
 
     GameTooltip:AddLine(" ")
-    GameTooltip:AddLine("Click to cycle this slot:", 0.6, 0.6, 0.6)
-    GameTooltip:AddLine("what you're wearing / clear it / leave it alone", 0.6, 0.6, 0.6)
+    GameTooltip:AddLine("Left-click to pick the item for this slot", 0.6, 0.6, 0.6)
+    GameTooltip:AddLine(state == "ignored"
+        and "Right-click to add this slot to the set"
+        or "Right-click to drop this slot from the set", 0.6, 0.6, 0.6)
     GameTooltip:Show()
 end
 
@@ -384,16 +440,20 @@ local function AttachTo(def)
     overlay.border:SetTexture("Interface\\Buttons\\UI-Quickslot-Depress")
     overlay.border:Hide()
 
+    overlay:RegisterForClicks("LeftButtonUp", "RightButtonUp")
     overlay:SetScript("OnEnter", OverlayTooltip)
     overlay:SetScript("OnLeave", GameTooltip_Hide)
-    overlay:SetScript("OnClick", function(self)
-        if editingSet then
-            ns.Sets:CycleSlot(editingSet, self.slotID)
+    overlay:SetScript("OnClick", function(self, click)
+        if not editingSet then
+            Paperdoll:Toggle(self.slotID, button)
+        elseif click == "RightButton" then
+            ns.Sets:ToggleSlot(editingSet, self.slotID)
+            Paperdoll:Close()
             UpdateEditOverlay(widgets[self.slotID])
             ns.Panel:Refresh()
             OverlayTooltip(self)
         else
-            Paperdoll:Toggle(self.slotID, button)
+            Paperdoll:Toggle(self.slotID, button, "assign")
         end
     end)
 
@@ -420,7 +480,7 @@ end
 
 function Paperdoll:Refresh()
     if flyout and flyout:IsShown() and openSlot then
-        Populate(openSlot)
+        Populate(openSlot, openMode)
     end
     if editingSet then
         for _, w in pairs(widgets) do UpdateEditOverlay(w) end

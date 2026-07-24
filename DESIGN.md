@@ -149,7 +149,12 @@ The button is styled as a small action button (icon plus the `UI-Quickslot2` rin
 
 **Why the overlays own the mouse while editing.** Clicking a paperdoll slot normally picks the item up, and that handler runs before any hook of ours sees the click. There's no way to hook it and cancel. So each slot carries a transparent overlay button that takes the mouse only when it should: while a modifier is held (for the swap flyout) or while a set is being edited. In edit mode the overlay also draws the set's item over the real one — retexturing the slot button itself would be undone by `PaperDollItemSlotButton_Update` on the next inventory event.
 
-Edit mode is explicitly entered and exited rather than being implied by having a set selected. While it's on, left-clicking a slot means "cycle what this set does here" and nothing else — the swap arrows hide so there's only ever one meaning for a click.
+Edit mode is explicitly entered and exited rather than being implied by having a set selected. While it's on the swap arrows hide, so a click on a slot has exactly one meaning:
+
+- **Left-click** opens the same flyout used for swapping, in *assign* mode — it writes the choice into the set instead of onto the character, and leads with a *No item* row. Reusing the flyout means picking a set's item and picking an item to wear right now look and behave the same.
+- **Right-click** takes the slot in or out of the set.
+
+The two are separate because "the set clears this slot" and "the set ignores this slot" are genuinely different, and a single cycling click made you tour through states you didn't want to reach the one you did. Splitting them also means neither gesture can put the set into a state you can't see the name of.
 
 **Where the panel follows.** Switching to the Reputation or Skills tab leaves `CharacterFrame` shown but hides `PaperDollFrame`, so the panel hooks `PaperDollFrame` rather than its own parent. That hide is deliberately not recorded as "the user closed the panel", so it comes back when you switch to the paperdoll again.
 

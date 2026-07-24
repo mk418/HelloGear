@@ -10,6 +10,13 @@ local PANEL_HEIGHT = 400
 local ROW_HEIGHT = 36
 local BUTTON_SIZE = 26
 
+-- Distance from the right slot column's right edge out to where the panel
+-- should start. That's the frame's own margin (~22px on the stock paperdoll)
+-- less the few pixels of transparent padding baked into the panel's backdrop
+-- border, so the drawn edges meet instead of leaving a seam. /hg dock nudges
+-- it if it lands wrong.
+local SLOT_TO_EDGE = 16
+
 local panel, toggle, scroll, content, statusText, editButton, equipButton, saveButton
 local rows = {}
 local options          -- the per-set options popout
@@ -391,9 +398,6 @@ local function ArtInset()
 end
 
 local function FitToFrame()
-    local inset = ArtInset()
-    if not inset then return end
-
     local _, rightSlot = ColumnEdgeSlots()
     if rightSlot then
         -- Directly above the top slot of the right-hand column, sharing its
@@ -402,8 +406,46 @@ local function FitToFrame()
         toggle:SetPoint("BOTTOMRIGHT", rightSlot, "TOPRIGHT", 0, 8)
     end
 
-    panel:ClearAllPoints()
-    panel:SetPoint("TOPLEFT", CharacterFrame, "TOPRIGHT", inset + 1, -12)
+    -- The right slot column's own right edge is the one measurement here
+    -- that's known good - the button sits on it and lands correctly. So the
+    -- panel docks from that edge too, rather than from CharacterFrame's,
+    -- which is a good way outside the visible artwork.
+    local nudge = ns.Config:Get("dockNudge") or 0
+    if rightSlot then
+        panel:ClearAllPoints()
+        panel:SetPoint("TOPLEFT", rightSlot, "TOPRIGHT", SLOT_TO_EDGE + nudge, 12)
+    else
+        local inset = ArtInset() or DEFAULT_ART_INSET
+        panel:ClearAllPoints()
+        panel:SetPoint("TOPLEFT", CharacterFrame, "TOPRIGHT", inset + 1 + nudge, -12)
+    end
+end
+
+-- Prints what the addon can actually see of the character frame. Guessing at
+-- this from the outside has not worked; /hg dock reports the real numbers.
+function Panel:ReportGeometry()
+    if not (PaperDollFrame and PaperDollFrame:IsShown()) then
+        ns:Print("open the character sheet first, then run /hg dock")
+        return
+    end
+    local left, right = ColumnEdgeSlots()
+    ns:Print("character frame: left %.1f  right %.1f  width %.1f",
+        CharacterFrame:GetLeft() or -1, CharacterFrame:GetRight() or -1, CharacterFrame:GetWidth() or -1)
+    if left and right then
+        ns:Print("slot columns: left edge %.1f  right edge %.1f", left:GetLeft(), right:GetRight())
+        ns:Print("derived artwork inset: %.1f (fallback %d)", ArtInset() or 0, DEFAULT_ART_INSET)
+    else
+        ns:Print("could not measure the slot columns")
+    end
+    ns:Print("panel left edge: %.1f   nudge: %d",
+        panel:GetLeft() or -1, ns.Config:Get("dockNudge") or 0)
+    ns:Print("use |cffffff00/hg dock <pixels>|r to shift it; negative moves it left")
+end
+
+function Panel:SetDockNudge(pixels)
+    ns.Config:Set("dockNudge", pixels ~= 0 and pixels or nil)
+    FitToFrame()
+    ns:Print("dock nudge set to %d", pixels)
 end
 
 local function BuildPanel()
@@ -509,8 +551,8 @@ local function BuildPanel()
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:AddLine("Edit slots on the character sheet", 1, 1, 1)
         GameTooltip:AddLine("Each slot shows what the set does with it. " ..
-            "Click a slot to cycle between wearing what you have on, clearing the slot, " ..
-            "and leaving it alone.", 0.8, 0.8, 0.8, true)
+            "Left-click a slot to pick its item from what you're carrying, " ..
+            "right-click to take the slot in or out of the set.", 0.8, 0.8, 0.8, true)
         GameTooltip:Show()
     end)
     editButton:SetScript("OnLeave", GameTooltip_Hide)
@@ -673,7 +715,7 @@ function Panel:Refresh()
 
     local set = selected and Sets:Get(selected)
     if editing and set then
-        statusText:SetText("Click a slot to change it")
+        statusText:SetText("L-click a slot: item   R-click: in/out")
     elseif set then
         local managed, missing = 0, 0
         for slot, gearID in pairs(set.equip) do

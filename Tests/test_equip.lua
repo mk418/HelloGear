@@ -619,30 +619,46 @@ scenario("full 15-slot set swap in one go", function()
 end)
 
 ------------------------------------------------------------------
-scenario("paperdoll slot editing cycles through the three states", function()
+scenario("right-click takes a slot in and out of the set", function()
     local helm = G(100)
     world.worn[1] = helm
     local set = Sets:Create("Edit", { equip = {} })
 
     check(Sets:SlotState(set, 1) == "ignored", "starts out unmanaged")
 
-    check(Sets:CycleSlot(set, 1) == "worn", "first click records what's worn")
+    check(Sets:ToggleSlot(set, 1) == "worn", "coming in adopts what's worn")
     check(set.equip[1] == helm, "stored the worn item")
 
-    check(Sets:CycleSlot(set, 1) == "empty", "second click clears the slot")
-    check(set.equip[1] == ns.EMPTY, "stored the empty sentinel")
-
-    check(Sets:CycleSlot(set, 1) == "ignored", "third click goes back to unmanaged")
+    check(Sets:ToggleSlot(set, 1) == "ignored", "toggling again drops it")
     check(set.equip[1] == nil, "slot dropped from the set")
 end)
 
 ------------------------------------------------------------------
-scenario("editing a bare slot skips straight to clear", function()
-    -- Nothing worn in the off hand: there is no item to record, so the only
-    -- meaningful thing the first click can mean is "this set clears it".
+scenario("a bare slot comes into the set as a clear", function()
+    -- Nothing worn in the off hand, so there is nothing to adopt; the only
+    -- other thing including it could mean is "this set strips the slot".
     local set = Sets:Create("Edit", { equip = {} })
-    check(Sets:CycleSlot(set, 17) == "empty", "bare slot becomes a clear")
-    check(Sets:CycleSlot(set, 17) == "ignored", "and then unmanaged")
+    check(Sets:ToggleSlot(set, 17) == "empty", "bare slot comes in as a clear")
+    check(Sets:ToggleSlot(set, 17) == "ignored", "and goes back out")
+end)
+
+------------------------------------------------------------------
+scenario("left-click assigns a specific item to a slot", function()
+    local worn, other = G(100), G(111)
+    world.worn[1] = worn
+    local set = Sets:Create("Edit", { equip = {} })
+
+    check(Sets:SetSlot(set, 1, other) == "stored", "picked an item that isn't on")
+    check(set.equip[1] == other, "stored the chosen item")
+
+    check(Sets:SetSlot(set, 1, worn) == "worn", "picking the worn item reads as worn")
+
+    -- The "No item" row: the set strips the slot, which is not the same as
+    -- dropping the slot from the set.
+    check(Sets:SetSlot(set, 1, ns.EMPTY) == "empty", "no-item means clear the slot")
+    check(set.equip[1] == ns.EMPTY, "stored the empty sentinel, not nil")
+
+    check(Sets:SetSlot(set, 1, nil) == "ignored", "nil drops the slot entirely")
 end)
 
 ------------------------------------------------------------------

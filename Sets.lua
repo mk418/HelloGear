@@ -217,17 +217,21 @@ function Sets:SlotState(set, slotID)
     return "stored"
 end
 
--- ignored -> whatever is worn (or "clear it" if the slot is bare)
--- worn/stored -> clear it
--- empty -> ignored
-function Sets:CycleSlot(set, slotID)
-    local state = self:SlotState(set, slotID)
-    if state == "ignored" then
+-- Assign a specific item to a slot. gearID may be a gear ID, ns.EMPTY to have
+-- the set clear the slot, or nil to drop the slot from the set entirely.
+function Sets:SetSlot(set, slotID, gearID)
+    set.equip[slotID] = gearID
+    return self:SlotState(set, slotID)
+end
+
+-- In or out of the set. Bringing a slot in adopts whatever is worn; if the
+-- slot is bare there's nothing to adopt, so it comes in as "clear this slot",
+-- which is the only other thing it could usefully mean.
+function Sets:ToggleSlot(set, slotID)
+    if set.equip[slotID] == nil then
         set.equip[slotID] = Items.GetWorn(slotID) or ns.EMPTY
-    elseif state == "empty" then
-        set.equip[slotID] = nil
     else
-        set.equip[slotID] = ns.EMPTY
+        set.equip[slotID] = nil
     end
     return self:SlotState(set, slotID)
 end
