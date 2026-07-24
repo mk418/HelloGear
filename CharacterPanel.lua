@@ -6,7 +6,7 @@ local Items = ns.Items
 local Sets = ns.Sets
 
 local PANEL_WIDTH = 200
-local PANEL_HEIGHT = 376
+local PANEL_HEIGHT = 400
 local ROW_HEIGHT = 36
 local BUTTON_SIZE = 26
 
@@ -332,16 +332,84 @@ end
 -- Panel
 --------------------------------------------------------------------------
 
-local function BuildPanel()
-    -- Anchored under the close button rather than off the frame's own corner.
-    -- CharacterFrame is a good deal wider than its artwork, so its right edge
-    -- is nowhere near the visible one; the close button sits at the top-right
-    -- of the art itself and tracks it.
-    local anchor = _G.CharacterFrameCloseButton or CharacterFrame.CloseButton or CharacterFrame
+--------------------------------------------------------------------------
+-- Fitting to the character frame
+--
+-- CharacterFrame is a vanilla UIPanelFrame: 384x512, with the artwork only
+-- filling the top-left 338x424 of it. So its right edge is some 46px outside
+-- the frame you can actually see, and anything anchored there floats in space.
+--
+-- Rather than hardcode that number, both the button and the panel are placed
+-- from the paperdoll's own slot columns. The columns are laid out symmetrically
+-- inside the artwork, so the left column's margin is also the right column's -
+-- which gives the visible edge, and a button sharing the right column's edge
+-- inherits the frame's real margin for free.
+--------------------------------------------------------------------------
 
+local function ColumnEdgeSlots()
+    local centerX = CharacterFrame:GetCenter()
+    if not centerX then return nil end
+
+    local left, right
+    for _, def in ipairs(ns.SLOTS) do
+        local button = _G["Character" .. def.key]
+        local buttonLeft = button and button:GetLeft()
+        if buttonLeft and button:GetTop() then
+            if buttonLeft > centerX then
+                if not right or button:GetTop() > right:GetTop() then right = button end
+            else
+                if not left or button:GetTop() > left:GetTop() then left = button end
+            end
+        end
+    end
+    return left, right
+end
+
+-- The stock 384-vs-338 difference, used when the measurement doesn't make
+-- sense. Only a fallback: the whole point is not to rely on it.
+local DEFAULT_ART_INSET = -46
+
+-- Pure geometry, separated out so it can be tested without a character frame
+-- to measure. Returns the offset from the frame's right edge to the artwork's
+-- right edge, which is always negative.
+function Panel.ComputeArtInset(frameLeft, frameRight, leftSlotLeft, rightSlotRight)
+    local margin = leftSlotLeft - frameLeft
+    local inset = (rightSlotRight + margin) - frameRight
+    -- If the paperdoll has been rearranged into something this doesn't
+    -- understand, fall back rather than flinging the panel somewhere absurd.
+    if margin < 0 or inset > 0 or inset < -120 then return DEFAULT_ART_INSET end
+    return inset
+end
+
+-- nil if the frame hasn't been laid out yet.
+local function ArtInset()
+    local left, right = ColumnEdgeSlots()
+    if not left or not right then return nil end
+    return Panel.ComputeArtInset(
+        CharacterFrame:GetLeft(), CharacterFrame:GetRight(),
+        left:GetLeft(), right:GetRight())
+end
+
+local function FitToFrame()
+    local inset = ArtInset()
+    if not inset then return end
+
+    local _, rightSlot = ColumnEdgeSlots()
+    if rightSlot then
+        -- Directly above the top slot of the right-hand column, sharing its
+        -- right edge, so the margin matches the rest of the frame.
+        toggle:ClearAllPoints()
+        toggle:SetPoint("BOTTOMRIGHT", rightSlot, "TOPRIGHT", 0, 8)
+    end
+
+    panel:ClearAllPoints()
+    panel:SetPoint("TOPLEFT", CharacterFrame, "TOPRIGHT", inset + 1, -12)
+end
+
+local function BuildPanel()
     toggle = CreateFrame("CheckButton", "HelloGearCharacterButton", CharacterFrame)
     toggle:SetSize(BUTTON_SIZE, BUTTON_SIZE)
-    toggle:SetPoint("TOPRIGHT", anchor, "BOTTOMRIGHT", -6, 6)
+    toggle:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", -54, -48)
     toggle:SetFrameLevel(CharacterFrame:GetFrameLevel() + 2)
 
     toggle.icon = toggle:CreateTexture(nil, "BACKGROUND")
@@ -375,10 +443,9 @@ local function BuildPanel()
 
     panel = CreateFrame("Frame", "HelloGearCharacterPanel", CharacterFrame, "BackdropTemplate")
     panel:SetSize(PANEL_WIDTH, PANEL_HEIGHT)
-    -- Hung off the button rather than the frame, so the panel reads as
-    -- belonging to it and the two stay put together whatever the character
-    -- frame's padding turns out to be.
-    panel:SetPoint("TOPLEFT", toggle, "TOPRIGHT", 10, 4)
+    -- Provisional; FitToFrame docks it flush against the artwork once the
+    -- character frame has been laid out.
+    panel:SetPoint("TOPLEFT", CharacterFrame, "TOPRIGHT", -45, -12)
     panel:SetFrameLevel(CharacterFrame:GetFrameLevel() + 1)
     panel:EnableMouse(true)
     panel:SetBackdrop({
@@ -465,6 +532,10 @@ local function BuildPanel()
     -- parent.
     if PaperDollFrame then
         PaperDollFrame:HookScript("OnShow", function()
+            -- Re-measured on every show rather than once at login: the frame
+            -- has a real rect by now, and this also re-fits if another addon
+            -- rearranges the paperdoll later.
+            FitToFrame()
             toggle:Show()
             if ns.Config:Get("panelShown") then
                 panel:Show()
@@ -499,6 +570,7 @@ function Panel:Init()
     end)
 
     local paperdollUp = PaperDollFrame and PaperDollFrame:IsShown() or false
+    if paperdollUp then FitToFrame() end
     toggle:SetShown(paperdollUp)
     toggle:SetChecked(ns.Config:Get("panelShown") and true or false)
     if paperdollUp and ns.Config:Get("panelShown") then

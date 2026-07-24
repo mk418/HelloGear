@@ -139,7 +139,11 @@ Set management lives on the character sheet rather than in a window of its own. 
 
 **Why docked outside rather than inside.** Retail has a wide character frame with a dedicated right-hand column, which is where its equipment manager lives. Classic's frame has no such column — a panel inside it would cover the model and the slot buttons. Since the whole point is to click those slots while editing, the panel goes outside. The right edge is free in practice: CharacterStatsClassic overlays *inside* the frame, and DragonflightUI's own equipment manager only exists when DragonflightUI is enabled.
 
-**Anchoring.** `CharacterFrame` is considerably wider than its artwork, so its right edge is nowhere near the visible one. The toggle button sits *inside* the frame, hung under `CharacterFrameCloseButton` — the close button is at the top-right of the art itself and so tracks it — and the panel hangs off the button. Nothing measures against the frame's own bounds, and the panel reads as belonging to the button that opens it.
+**Anchoring.** `CharacterFrame` is a vanilla `UIPanelFrame`: 384x512 of frame holding 338x424 of artwork. Its right edge is therefore some 46px outside the frame you can actually see, and anything anchored there floats in space — which is what made the first two attempts at this look detached.
+
+That 46 isn't hardcoded. Both the button and the panel are placed from the paperdoll's own slot columns, which are laid out symmetrically inside the artwork: the left column's margin is also the right column's, so `right column's right edge + that margin` gives the artwork's edge. The panel docks flush to it, and the button — sitting directly above the top slot of the right-hand column, sharing its right edge — inherits the frame's real margin for free. A sanity clamp falls back to the stock inset if the measurement comes out absurd.
+
+Measuring rather than hardcoding also means the panel docks correctly against a frame some other addon has resized, and it's re-measured on every `PaperDollFrame` show rather than once at login, so a later rearrangement re-fits. The arithmetic is `Panel.ComputeArtInset`, kept free of frame lookups so `Tests/test_geometry.lua` can exercise it.
 
 The button is styled as a small action button (icon plus the `UI-Quickslot2` ring at Blizzard's 1.83x ratio) rather than a spellbook-style sidebar tab. That tab artwork is drawn to key into the spellbook frame's specific edge and looks out of place anywhere else.
 
@@ -175,10 +179,12 @@ The pure-logic layers run headless. `Items.lua`, `Sets.lua`, `Equip.lua` and `Im
 
 ```sh
 lua Tests/test_equip.lua
+lua Tests/test_geometry.lua
 lua Tests/test_import.lua "<path to a WTF .../SavedVariables/ItemRack.lua>"
 ```
 
 - **`test_import.lua`** loads a real ItemRack saved-variable file — it's valid Lua — and checks that every set round-trips to the same four fields, re-derived independently from the raw ItemRack strings. Also covers hidden flags, helm/cloak flags, `~`-prefixed internal sets being skipped, and import idempotency.
+- **`test_geometry.lua`** checks the character-frame fitting arithmetic — stock layout, a moved frame, artwork that fills its frame, and the nonsense-in-fallback-out cases.
 - **`test_equip.lua`** runs the real swap engine against a simulated character: worn slots, five bags, an item cursor, and client rules for two-handers, invalid slots and full bags. Covers ring cross-swaps, two-hander transitions in both directions, deliberate empties, enchant preference, random-suffix rejection, missing gear, toggle round-trips and full 15-slot swaps.
 
 `Tests/` is not listed in the TOC, so the game never loads it.
