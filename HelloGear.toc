@@ -1,0 +1,19 @@
+## Interface: 11509
+## Title: HelloGear
+## Notes: Gear sets for Classic Era - one-click swaps, paperdoll slot menus, ItemRack import.
+## Author: Drikk
+## Version: 0.1.0
+## SavedVariables: HelloGearDB
+## SavedVariablesPerCharacter: HelloGearCharDB
+## X-License: MIT
+
+Core.lua
+Config.lua
+Items.lua
+Sets.lua
+Equip.lua
+Import.lua
+Menu.lua
+Minimap.lua
+SlotMenus.lua
+UI.lua
