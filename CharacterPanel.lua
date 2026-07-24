@@ -6,10 +6,11 @@ local Items = ns.Items
 local Sets = ns.Sets
 
 local PANEL_WIDTH = 200
-local PANEL_HEIGHT = 400
+local PANEL_HEIGHT = 376
 local ROW_HEIGHT = 36
+local BUTTON_SIZE = 26
 
-local panel, tab, scroll, content, statusText, editButton, equipButton, saveButton
+local panel, toggle, scroll, content, statusText, editButton, equipButton, saveButton
 local rows = {}
 local options          -- the per-set options popout
 local selected
@@ -332,45 +333,52 @@ end
 --------------------------------------------------------------------------
 
 local function BuildPanel()
-    -- Anchored off the close button rather than the frame's own corner. The
-    -- character frame is a good deal wider than its artwork, so CharacterFrame's
-    -- right edge is nowhere near the visible right edge; the close button sits
-    -- at the top-right of the art itself and tracks it.
+    -- Anchored under the close button rather than off the frame's own corner.
+    -- CharacterFrame is a good deal wider than its artwork, so its right edge
+    -- is nowhere near the visible one; the close button sits at the top-right
+    -- of the art itself and tracks it.
     local anchor = _G.CharacterFrameCloseButton or CharacterFrame.CloseButton or CharacterFrame
 
-    tab = CreateFrame("CheckButton", "HelloGearCharacterTab", CharacterFrame)
-    tab:SetSize(32, 32)
-    tab:SetPoint("TOPLEFT", anchor, "TOPRIGHT", -8, -34)
-    tab:SetFrameLevel(CharacterFrame:GetFrameLevel() + 1)
+    toggle = CreateFrame("CheckButton", "HelloGearCharacterButton", CharacterFrame)
+    toggle:SetSize(BUTTON_SIZE, BUTTON_SIZE)
+    toggle:SetPoint("TOPRIGHT", anchor, "BOTTOMRIGHT", -6, 6)
+    toggle:SetFrameLevel(CharacterFrame:GetFrameLevel() + 2)
 
-    tab.bg = tab:CreateTexture(nil, "BACKGROUND")
-    tab.bg:SetSize(64, 64)
-    tab.bg:SetPoint("TOPLEFT", -3, 11)
-    tab.bg:SetTexture("Interface\\SpellBook\\SpellBookSkillLineTab")
+    toggle.icon = toggle:CreateTexture(nil, "BACKGROUND")
+    toggle.icon:SetPoint("TOPLEFT", 2, -2)
+    toggle.icon:SetPoint("BOTTOMRIGHT", -2, 2)
+    toggle.icon:SetTexture("Interface\\Icons\\INV_Chest_Plate06")
+    toggle.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 
-    tab:SetNormalTexture("Interface\\Icons\\INV_Chest_Plate06")
-    tab:GetNormalTexture():SetTexCoord(0.07, 0.93, 0.07, 0.93)
-    tab:SetCheckedTexture("Interface\\Buttons\\CheckButtonHilight")
-    tab:GetCheckedTexture():SetBlendMode("ADD")
-    tab:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square")
+    -- Standard action-button furniture: the gold ring is drawn at ~1.83x the
+    -- button, the same ratio Blizzard's 36px action buttons use for their
+    -- 66px border.
+    toggle.border = toggle:CreateTexture(nil, "OVERLAY")
+    toggle.border:SetTexture("Interface\\Buttons\\UI-Quickslot2")
+    toggle.border:SetSize(BUTTON_SIZE * 1.83, BUTTON_SIZE * 1.83)
+    toggle.border:SetPoint("CENTER", 0, -1)
 
-    tab:SetScript("OnEnter", function(self)
+    toggle:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
+    toggle:SetCheckedTexture("Interface\\Buttons\\CheckButtonHilight")
+    toggle:GetCheckedTexture():SetBlendMode("ADD")
+
+    toggle:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:AddLine("Gear Sets", 1, 1, 1)
         GameTooltip:AddLine(("%d set(s)"):format(Sets:Count()), 0.7, 0.7, 0.7)
         GameTooltip:Show()
     end)
-    tab:SetScript("OnLeave", GameTooltip_Hide)
-    tab:SetScript("OnClick", function(self)
+    toggle:SetScript("OnLeave", GameTooltip_Hide)
+    toggle:SetScript("OnClick", function(self)
         Panel:SetShown(self:GetChecked())
     end)
 
     panel = CreateFrame("Frame", "HelloGearCharacterPanel", CharacterFrame, "BackdropTemplate")
     panel:SetSize(PANEL_WIDTH, PANEL_HEIGHT)
-    -- Positioned off the tab rather than the close button, so the tab column
-    -- and the panel stay a fixed distance apart whatever the frame's padding
-    -- turns out to be.
-    panel:SetPoint("TOPLEFT", tab, "TOPRIGHT", -2, 34)
+    -- Hung off the button rather than the frame, so the panel reads as
+    -- belonging to it and the two stay put together whatever the character
+    -- frame's padding turns out to be.
+    panel:SetPoint("TOPLEFT", toggle, "TOPRIGHT", 10, 4)
     panel:SetFrameLevel(CharacterFrame:GetFrameLevel() + 1)
     panel:EnableMouse(true)
     panel:SetBackdrop({
@@ -457,7 +465,7 @@ local function BuildPanel()
     -- parent.
     if PaperDollFrame then
         PaperDollFrame:HookScript("OnShow", function()
-            tab:Show()
+            toggle:Show()
             if ns.Config:Get("panelShown") then
                 panel:Show()
                 Panel:Refresh()
@@ -467,7 +475,7 @@ local function BuildPanel()
             -- Hide directly rather than through SetShown: switching to the
             -- Reputation tab shouldn't be remembered as "the panel is closed".
             panel:Hide()
-            tab:Hide()
+            toggle:Hide()
             Panel:SetEditing(false)
         end)
     end
@@ -491,8 +499,8 @@ function Panel:Init()
     end)
 
     local paperdollUp = PaperDollFrame and PaperDollFrame:IsShown() or false
-    tab:SetShown(paperdollUp)
-    tab:SetChecked(ns.Config:Get("panelShown") and true or false)
+    toggle:SetShown(paperdollUp)
+    toggle:SetChecked(ns.Config:Get("panelShown") and true or false)
     if paperdollUp and ns.Config:Get("panelShown") then
         panel:Show()
         self:Refresh()
@@ -521,12 +529,12 @@ function Panel:SetEditing(on)
     self:Refresh()
 end
 
--- The tab's visibility is tied to the paperdoll being up; this only controls
--- the panel itself, and is what gets remembered between sessions.
+-- The button's visibility is tied to the paperdoll being up; this only
+-- controls the panel itself, and is what gets remembered between sessions.
 function Panel:SetShown(shown)
     shown = shown and true or false
     ns.Config:Set("panelShown", shown)
-    tab:SetChecked(shown)
+    toggle:SetChecked(shown)
     if shown then
         panel:Show()
         self:Refresh()

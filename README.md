@@ -17,7 +17,7 @@ Step 2 matters: ItemRack's sets live in *its* saved variables, which only load w
 
 ## Using it
 
-Set management lives on the character sheet. The tab on the right edge opens a **Gear Sets** panel docked beside it: your sets, with Equip and Save, and a gear button on each row for renaming, the icon, and the helm/cloak toggles.
+Set management lives on the character sheet. The gear button under the close button opens a **Gear Sets** panel docked beside the frame: your sets, with Equip and Save, and a gear button on each row for renaming, the icon, and the helm/cloak toggles.
 
 - **Minimap button** — click for the quick set menu, right-click to open the panel.
 - **In the menu** — click a set to equip it, shift-click to toggle it, right-click to put back what it replaced. Right-click *Manage sets* to reveal sets marked hidden.

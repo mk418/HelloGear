@@ -27,7 +27,7 @@ That single break isn't worth a fork. The interesting part is that the surroundi
 - **Equipping** — one-click equip, toggle (equip / put back what it displaced), single-item swaps.
 - **ItemRack import** — sets, icons, hidden flags, helm/cloak toggles, deliberate-empty slots.
 - **Set menu** — minimap button opens a list; click equips, shift-click toggles, right-click restores.
-- **Character-sheet panel** — a sidebar tab on the character frame opens a docked gear-set panel, and the paperdoll itself becomes the set editor.
+- **Character-sheet panel** — a button on the character frame opens a docked gear-set panel, and the paperdoll itself becomes the set editor.
 - **Paperdoll slot menus** — every character-sheet slot gets a menu of the alternatives in your bags, with cooldown swirls.
 - **Key bindings** — six assignable set slots plus a menu toggle.
 - **Macro API** — `HelloGear.EquipSet("name")`, and the bare `EquipSet()` global ItemRack-era macros expect.
@@ -58,7 +58,7 @@ HelloGear/
 ├── Minimap.lua         -- minimap button
 ├── Paperdoll.lua       -- everything attached to character-sheet slots:
 │                          swap flyouts and the set-editing overlays
-├── CharacterPanel.lua  -- the docked gear-set panel and its sidebar tab
+├── CharacterPanel.lua  -- the docked gear-set panel and its toggle button
 └── Tests/              -- headless harnesses; not listed in the TOC
 ```
 
@@ -135,11 +135,13 @@ Era permits gear swaps in combat, so the engine doesn't gate on it — no combat
 
 ## The character-sheet integration
 
-Set management lives on the character sheet rather than in a window of its own. A sidebar tab opens a panel docked to the right of the frame, and the paperdoll itself becomes the set editor.
+Set management lives on the character sheet rather than in a window of its own. A button inside the frame opens a panel docked to its right, and the paperdoll itself becomes the set editor.
 
 **Why docked outside rather than inside.** Retail has a wide character frame with a dedicated right-hand column, which is where its equipment manager lives. Classic's frame has no such column — a panel inside it would cover the model and the slot buttons. Since the whole point is to click those slots while editing, the panel goes outside. The right edge is free in practice: CharacterStatsClassic overlays *inside* the frame, and DragonflightUI's own equipment manager only exists when DragonflightUI is enabled.
 
-**Anchoring.** `CharacterFrame` is considerably wider than its artwork, so its right edge is nowhere near the visible one. The sidebar tab anchors off `CharacterFrameCloseButton`, which sits at the top-right of the art and therefore tracks it, and the panel anchors off the tab — so the two stay a fixed distance apart regardless of the frame's padding.
+**Anchoring.** `CharacterFrame` is considerably wider than its artwork, so its right edge is nowhere near the visible one. The toggle button sits *inside* the frame, hung under `CharacterFrameCloseButton` — the close button is at the top-right of the art itself and so tracks it — and the panel hangs off the button. Nothing measures against the frame's own bounds, and the panel reads as belonging to the button that opens it.
+
+The button is styled as a small action button (icon plus the `UI-Quickslot2` ring at Blizzard's 1.83x ratio) rather than a spellbook-style sidebar tab. That tab artwork is drawn to key into the spellbook frame's specific edge and looks out of place anywhere else.
 
 **Why the overlays own the mouse while editing.** Clicking a paperdoll slot normally picks the item up, and that handler runs before any hook of ours sees the click. There's no way to hook it and cancel. So each slot carries a transparent overlay button that takes the mouse only when it should: while a modifier is held (for the swap flyout) or while a set is being edited. In edit mode the overlay also draws the set's item over the real one — retexturing the slot button itself would be undone by `PaperDollItemSlotButton_Update` on the next inventory event.
 
