@@ -139,7 +139,9 @@ Set management lives on the character sheet rather than in a window of its own. 
 
 **Why docked outside rather than inside.** Retail has a wide character frame with a dedicated right-hand column, which is where its equipment manager lives. Classic's frame has no such column — a panel inside it would cover the model and the slot buttons. Since the whole point is to click those slots while editing, the panel goes outside. The right edge is free in practice: CharacterStatsClassic overlays *inside* the frame, and DragonflightUI's own equipment manager only exists when DragonflightUI is enabled.
 
-**Anchoring.** `CharacterFrame` is wider than its artwork, so its right edge is not the edge you can see and anything anchored there floats in space. Measured on 1.15.9 via `/hg dock`: the frame spans 0..384 while the slot columns run 21..343, putting the artwork's right edge around 364 and leaving ~20px of dead frame past it.
+**Anchoring.** `CharacterFrame` is wider and taller than the frame you can see — its own edges sit in dead space, so anything anchored to them floats clear of the artwork. Measured on 1.15.9 via `/hg dock`: the frame spans 0..384 while the slot columns run 21..343.
+
+The answer turned out to be much simpler than reconstructing those edges. Now that the character frame is modern chrome, its border is a nine-slice, and `CharacterFrame.NineSlice`'s bounds *are* the visible frame — exactly the thing several rounds of measuring were trying to derive. Anchoring to it matches the right edge, the top and the bottom in one go, with no arithmetic at all. The measured path below is kept as a fallback for chrome that has no nine-slice.
 
 That 20 isn't hardcoded — it's only the fallback. Both the button and the panel are placed from the paperdoll's own slot columns, which are laid out symmetrically inside the artwork: the left column's margin is also the right column's, so `right column's right edge + that margin` gives the artwork's edge. The button sits directly above the top slot of the right-hand column, sharing its right edge, and so inherits the frame's real margin for free.
 

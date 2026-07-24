@@ -422,15 +422,24 @@ local function FitToFrame()
         toggle:SetPoint("BOTTOMRIGHT", rightSlot, "TOPRIGHT", 0, 8)
     end
 
-    -- Anchored to the frame's TOPLEFT with a measured x rather than to its
-    -- TOPRIGHT: the horizontal position comes from the artwork's edge, but the
-    -- vertical has to come from the top of the frame, not from a slot button
-    -- most of the way down it.
+    local nudge = ns.Config:Get("dockNudge") or 0
+
+    -- Now that the character frame is modern chrome, its border is a nine-slice
+    -- whose bounds ARE the frame you can see - which is the thing every
+    -- derivation up to here was trying to reconstruct by measuring around it.
+    -- Anchor to it directly and the panel matches on all three edges at once.
+    local visible = CharacterFrame.NineSlice
+    if visible and visible:GetRight() then
+        panel:ClearAllPoints()
+        panel:SetPoint("TOPLEFT", visible, "TOPRIGHT", -ns.CHROME_INSET + nudge, 0)
+        panel:SetPoint("BOTTOMLEFT", visible, "BOTTOMRIGHT", -ns.CHROME_INSET + nudge, 0)
+        return
+    end
+
+    -- Older chrome: reconstruct the artwork's edges by measuring the paperdoll.
     local inset = ArtInset() or DEFAULT_ART_INSET
     local artRight = CharacterFrame:GetRight() + inset
-    local x = (artRight - CharacterFrame:GetLeft())
-        - ns.CHROME_INSET
-        + (ns.Config:Get("dockNudge") or 0)
+    local x = (artRight - CharacterFrame:GetLeft()) - ns.CHROME_INSET + nudge
 
     local tab1 = _G.CharacterFrameTab1
     local bottom = Panel.ComputeArtBottom(CharacterFrame:GetBottom(), tab1 and tab1:GetTop())
@@ -453,6 +462,14 @@ function Panel:ReportGeometry()
     local left, right = ColumnEdgeSlots()
     ns:Print("character frame: left %.1f  right %.1f  width %.1f",
         CharacterFrame:GetLeft() or -1, CharacterFrame:GetRight() or -1, CharacterFrame:GetWidth() or -1)
+
+    local visible = CharacterFrame.NineSlice
+    if visible and visible:GetRight() then
+        ns:Print("nine-slice (the frame you see): right %.1f  top %.1f  bottom %.1f |cff80ff80(in use)|r",
+            visible:GetRight(), visible:GetTop(), visible:GetBottom())
+    else
+        ns:Print("|cffff8080no nine-slice|r - falling back to measuring the paperdoll")
+    end
     if left and right then
         ns:Print("slot columns: left edge %.1f  right edge %.1f", left:GetLeft(), right:GetRight())
         ns:Print("derived artwork inset: %.1f (fallback %d)", ArtInset() or 0, DEFAULT_ART_INSET)
