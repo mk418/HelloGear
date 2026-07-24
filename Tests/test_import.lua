@@ -58,8 +58,6 @@ ns.EMPTY = 0
 ns.API = {
     GetItemInfo = C_Item.GetItemInfo,
     GetItemInfoInstant = C_Item.GetItemInfoInstant,
-    GetItemCooldown = C_Item.GetItemCooldown,
-    GetItemCount = C_Item.GetItemCount,
 }
 
 local printed = {}

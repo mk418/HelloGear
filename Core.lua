@@ -24,9 +24,13 @@ end
 ns.API = {}
 ns.API.GetItemInfo         = (C_Item and C_Item.GetItemInfo) or GetItemInfo
 ns.API.GetItemInfoInstant  = (C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant
-ns.API.GetItemCooldown     = (C_Item and C_Item.GetItemCooldown) or GetItemCooldown
-ns.API.GetItemCount        = (C_Item and C_Item.GetItemCount) or GetItemCount
 ns.API.SetCVar             = (C_CVar and C_CVar.SetCVar) or SetCVar
+
+-- There is deliberately no GetItemCooldown here. The bare global is gone on
+-- 1.15.9 and C_Item carries no replacement in this build, so a fallback chain
+-- resolves to nil and only blows up when something finally calls it. Item
+-- cooldowns are read from where the item actually is instead - see
+-- Items.GetCooldown.
 
 -- ShowHelm()/ShowCloak() no longer exist; the CVars behind them still do.
 function ns.API.SetShowHelm(show)
@@ -61,7 +65,22 @@ ns:On("ADDON_LOADED", function(name)
     ns.Config:Init()
 end)
 
+-- A nil in ns.API is invisible until something calls it, which means a client
+-- change surfaces as an error mid-click rather than at load. Check at login so
+-- it's obvious and reportable instead.
+local function CheckAPI()
+    local missing = {}
+    for _, name in ipairs({ "GetItemInfo", "GetItemInfoInstant", "SetCVar" }) do
+        if type(ns.API[name]) ~= "function" then missing[#missing + 1] = name end
+    end
+    if #missing > 0 then
+        ns:Print("|cffff8080missing client API:|r %s - please report this",
+            table.concat(missing, ", "))
+    end
+end
+
 ns:On("PLAYER_LOGIN", function()
+    CheckAPI()
     ns.Sets:Init()
     ns.Equip:Init()
     ns.Menu:Init()

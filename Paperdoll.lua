@@ -53,6 +53,10 @@ local function GatherCandidates(slotID)
                     texture = texture,
                     quality = quality or 1,
                     itemLevel = itemLevel,
+                    -- Kept so the row can read a cooldown off the item's
+                    -- actual location; see Items.GetCooldown.
+                    bag = entry.bag,
+                    slot = entry.slot,
                 }
             end
         end
@@ -174,7 +178,7 @@ local function Populate(slotID, mode)
     local assigned = mode == "assign" and editingSet and editingSet.equip[slotID] or nil
 
     local index, seen = 0, {}
-    local function AddRow(gearID, texture, text, baseID)
+    local function AddRow(gearID, texture, text, source)
         if gearID ~= ns.EMPTY and seen[gearID] then return end
         seen[gearID] = true
 
@@ -184,10 +188,7 @@ local function Populate(slotID, mode)
         row.icon:SetTexture(texture)
         row.label:SetText(text)
 
-        -- Not `baseID and API.GetItemCooldown(baseID)`: `and` yields only the
-        -- first return value, which would silently drop the duration.
-        local start, duration
-        if baseID then start, duration = API.GetItemCooldown(baseID) end
+        local start, duration = Items.GetCooldown(source)
         if start and duration and duration > 0 then
             row.cooldown:SetCooldown(start, duration)
         else
@@ -217,13 +218,13 @@ local function Populate(slotID, mode)
         local name, texture, _, quality = Items.GetInfo(worn)
         AddRow(worn, texture,
             QualityColor(quality) .. (name or "...") .. "|r |cff808080(worn)|r",
-            Items.BaseID(worn))
+            { invSlot = slotID })
     end
 
     for _, candidate in ipairs(candidates) do
         AddRow(candidate.gearID, candidate.texture,
             QualityColor(candidate.quality) .. candidate.name .. "|r",
-            candidate.baseID)
+            candidate)
     end
 
     -- The set can point at gear that's in the bank, or gone. Show it anyway,
@@ -231,8 +232,7 @@ local function Populate(slotID, mode)
     if assigned and assigned ~= ns.EMPTY and not seen[assigned] then
         local name, texture, _, quality = Items.GetInfo(assigned)
         AddRow(assigned, texture,
-            QualityColor(quality) .. (name or "...") .. "|r |cff808080(not carried)|r",
-            Items.BaseID(assigned))
+            QualityColor(quality) .. (name or "...") .. "|r |cff808080(not carried)|r")
     end
 
     for i = index + 1, #rows do rows[i]:Hide() end

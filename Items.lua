@@ -260,6 +260,21 @@ function Items.FindFreeBagSlot(claimed)
     end
 end
 
+-- Cooldown for an item at a known location: {bag=, slot=} for a bag, or
+-- {invSlot=} for something worn. Read from the location rather than from an
+-- item ID because 1.15.9 has no working item-ID cooldown call - the bare
+-- GetItemCooldown global was removed and C_Item has no replacement, so
+-- anything built on one silently resolves to nil and errors on first use.
+-- Returns nothing for an item that is neither carried nor worn.
+function Items.GetCooldown(source)
+    if not source then return end
+    if source.bag then
+        return C_Container.GetContainerItemCooldown(source.bag, source.slot)
+    elseif source.invSlot then
+        return GetInventoryItemCooldown("player", source.invSlot)
+    end
+end
+
 function Items.IsBagSlotLocked(bag, slot)
     local info = GetContainerItemInfo(bag, slot)
     return info and info.isLocked or false

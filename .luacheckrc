@@ -66,14 +66,13 @@ read_globals = {
     "C_Container",
     "GetItemInfo",
     "GetItemInfoInstant",
-    "GetItemCooldown",
-    "GetItemCount",
     "NUM_BAG_SLOTS",
     -- Inventory
     "GetInventorySlotInfo",
     "GetInventoryItemLink",
     "GetInventoryItemID",
     "IsInventoryItemLocked",
+    "GetInventoryItemCooldown",
     "PickupInventoryItem",
     -- Cursor
     "CursorHasItem",

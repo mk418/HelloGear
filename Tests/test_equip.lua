@@ -34,6 +34,7 @@ local function reset()
     end
     world.cursor = nil
     world.time = 1000
+    world.cooldowns = {}   -- gearID -> duration
 end
 reset()
 
@@ -76,6 +77,11 @@ C_Container = {
         local g = world.bags[bag] and world.bags[bag].items[slot]
         if not g then return nil end
         return { hyperlink = linkFor(g), isLocked = false, itemID = gearItemID(g) }
+    end,
+    GetContainerItemCooldown = function(bag, slot)
+        local g = world.bags[bag] and world.bags[bag].items[slot]
+        if not g then return 0, 0, 0 end
+        return world.cooldowns[g] and world.time or 0, world.cooldowns[g] or 0, 1
     end,
     GetContainerNumFreeSlots = function(bag)
         local free = 0
@@ -164,6 +170,11 @@ function GetInventoryItemID(_, slot)
     return g and gearItemID(g) or nil
 end
 function IsInventoryItemLocked() return false end
+function GetInventoryItemCooldown(_, slot)
+    local g = world.worn[slot]
+    if not g then return 0, 0, 0 end
+    return world.cooldowns[g] and world.time or 0, world.cooldowns[g] or 0, 1
+end
 function CursorHasItem() return world.cursor ~= nil end
 function ClearCursor()
     if not world.cursor then return end
@@ -233,8 +244,6 @@ ns.EMPTY = 0
 ns.API = {
     GetItemInfo = C_Item.GetItemInfo,
     GetItemInfoInstant = C_Item.GetItemInfoInstant,
-    GetItemCooldown = C_Item.GetItemCooldown,
-    GetItemCount = C_Item.GetItemCount,
     SetShowHelm = function() end,
     SetShowCloak = function() end,
 }
@@ -670,6 +679,31 @@ scenario("a managed slot reads as stored when its item is off", function()
 
     world.worn[1] = other
     check(Sets:SlotState(set, 1) == "worn", "reads as worn once it's on")
+end)
+
+------------------------------------------------------------------
+scenario("item cooldowns are read from the item's location", function()
+    -- 1.15.9 removed the bare GetItemCooldown global and C_Item carries no
+    -- replacement, so anything keyed on an item ID resolves to nil and only
+    -- errors when something finally calls it. Cooldowns come from the
+    -- location instead, which is always known.
+    local trinket, worn = G(107), G(108)
+    putBag(trinket, 0, 3)
+    world.worn[13] = worn
+    world.cooldowns[trinket] = 120
+    world.cooldowns[worn] = 90
+
+    local start, duration = Items.GetCooldown({ bag = 0, slot = 3 })
+    check(duration == 120, "cooldown read from a bag slot")
+    check(start == world.time, "and its start time")
+
+    start, duration = Items.GetCooldown({ invSlot = 13 })
+    check(duration == 90, "cooldown read from a worn slot")
+
+    -- An item the set points at but you aren't carrying has no location, and
+    -- asking for one must not blow up.
+    check(Items.GetCooldown(nil) == nil, "no source is not an error")
+    check(Items.GetCooldown({}) == nil, "a source with no location is not an error")
 end)
 
 ------------------------------------------------------------------
