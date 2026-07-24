@@ -7,10 +7,6 @@ local Sets = ns.Sets
 
 local PANEL_WIDTH = 214
 local PANEL_HEIGHT = 400   -- provisional; FitToFrame anchors top and bottom
--- The drawn border is about as wide as the distance it sits inside the frame's
--- bounds, so one of these is how far to overlap to put two borders on top of
--- each other rather than side by side.
-local BORDER_WIDTH = 11
 local ROW_HEIGHT = 36
 local CONTENT_LEFT = 16    -- clear of the backdrop's 12px border
 local CONTENT_RIGHT = -34  -- border, plus room for the scrollbar inside it
@@ -408,6 +404,45 @@ end
 -- The close button's own edges sit this far inside the artwork's corner.
 local CLOSE_TO_EDGE = 3
 
+--------------------------------------------------------------------------
+-- Borrowing the character frame's own chrome
+--
+-- Read off the client with /hg dock art: the character frame is four texture
+-- quadrants laid out 384x512 on PaperDollFrame, the classic corner-piece
+-- frame. There is no reusable template for it, which is why every look-alike
+-- border tried here was visibly not it.
+--
+-- So the panel draws those same four textures again, shifted right so their
+-- right border lands on the panel's right edge. Everything to the left of the
+-- character frame's own edge is hidden behind it (the panel draws underneath),
+-- and what's left on screen is the character frame's artwork simply carrying
+-- on - same border, same corners, same interior, no seam to match because
+-- there isn't one.
+--------------------------------------------------------------------------
+
+-- Read at runtime rather than hardcoding file IDs, so a client that ships
+-- different artwork still gets its own.
+local function FrameArtPieces()
+    if not PaperDollFrame then return nil end
+    local pieces = {}
+    for _, region in ipairs({ PaperDollFrame:GetRegions() }) do
+        if region.GetTexture and region:GetDrawLayer() == "BORDER" then
+            local file = region:GetTexture()
+            local point, _, relPoint, ox, oy = region:GetPoint(1)
+            if file and point == "TOPLEFT" and relPoint == "TOPLEFT" then
+                pieces[#pieces + 1] = {
+                    file = file,
+                    width = region:GetWidth(),
+                    height = region:GetHeight(),
+                    x = ox or 0,
+                    y = oy or 0,
+                }
+            end
+        end
+    end
+    return #pieces > 0 and pieces or nil
+end
+
 -- Right and top of the frame you can actually see. Preferred reference is the
 -- close button, which Blizzard pins to the artwork's top-right corner; the
 -- slot-column derivation is the fallback for a frame without one.
@@ -452,44 +487,33 @@ local function FitToFrame()
     -- whose bounds ARE the frame you can see - which is the thing every
     -- derivation up to here was trying to reconstruct by measuring around it.
     -- Anchor to it directly and the panel matches on all three edges at once.
-    -- The panel's frame is inflated by the border inset on every side, so its
-    -- *drawn* edges land on the character frame's visible edges instead of
-    -- sitting inside them - that's what was making it look short.
-    --
-    -- Horizontally it goes one border width further still, tucking the panel's
-    -- left edge underneath the character frame's right border. Combined with
-    -- the panel drawing behind the character frame (see BuildPanel), that
-    -- leaves one shared seam rather than two borders back to back, which is
-    -- the difference between "integrated" and "parked next to".
-    local inset = ns.CHROME_INSET
-    local overlap = inset + BORDER_WIDTH
-
-    local visible = CharacterFrame.NineSlice
-    if visible and visible:GetRight() then
-        panel:ClearAllPoints()
-        panel:SetPoint("TOPLEFT", visible, "TOPRIGHT", -overlap + nudge, inset)
-        panel:SetPoint("BOTTOMLEFT", visible, "BOTTOMRIGHT", -overlap + nudge, -inset)
-        return
-    end
-
-    -- No nine-slice on this client, so the visible corner has to come from
-    -- something Blizzard pins to it. The close button is exactly that, and it
-    -- beats deriving the edge from the slot columns: those turn out not to be
-    -- symmetric within the artwork (left margin 21, right margin nearer 9), so
-    -- mirroring one onto the other overshoots by about ten pixels.
-    local right, top = VisibleCorner()
-    local x = (right - CharacterFrame:GetLeft()) - overlap + nudge
+    -- The visible corner comes from the close button, which Blizzard pins to
+    -- the artwork's top-right. Deriving it from the slot columns doesn't work:
+    -- they aren't symmetric within the artwork (left margin 21, right nearer
+    -- 9), so mirroring one onto the other overshoots by about ten pixels.
+    local right = (VisibleCorner())
+    local x = (right - CharacterFrame:GetLeft()) + nudge
 
     local tab1 = _G.CharacterFrameTab1
     local bottom = Panel.ComputeArtBottom(CharacterFrame:GetBottom(), tab1 and tab1:GetTop())
 
-    -- Anchored top and bottom so the panel is exactly as tall as the character
-    -- frame's artwork and tracks it, rather than carrying a fixed height that
-    -- would over- or under-shoot.
+    -- The panel's bounds are the artwork's bounds: left edge on the character
+    -- frame's right edge, top flush with it, bottom on the artwork's bottom.
+    -- The borrowed chrome brings its own transparent padding, exactly as the
+    -- character frame's does, so nothing here is inflated to compensate.
     panel:ClearAllPoints()
-    panel:SetPoint("TOPLEFT", CharacterFrame, "TOPLEFT", x,
-        (top - CharacterFrame:GetTop()) + inset)
-    panel:SetPoint("BOTTOMLEFT", CharacterFrame, "BOTTOMLEFT", x, bottom - inset)
+    panel:SetPoint("TOPLEFT", CharacterFrame, "TOPLEFT", x, 0)
+    panel:SetPoint("BOTTOMLEFT", CharacterFrame, "BOTTOMLEFT", x, bottom)
+
+    -- Slide the borrowed artwork so its right border lands on the panel's
+    -- right edge; the rest runs off to the left, behind the character frame.
+    if panel.art then
+        local originX = PANEL_WIDTH - (right - (PaperDollFrame:GetLeft() or CharacterFrame:GetLeft()))
+        for _, piece in ipairs(panel.art) do
+            piece.texture:ClearAllPoints()
+            piece.texture:SetPoint("TOPLEFT", panel, "TOPLEFT", originX + piece.x, piece.y)
+        end
+    end
 end
 
 -- Prints what the addon can actually see of the character frame. Guessing at
@@ -608,8 +632,22 @@ local function BuildPanel()
     -- different style butted up against the first.
     panel:SetFrameLevel(math.max(0, CharacterFrame:GetFrameLevel() - 1))
     panel:EnableMouse(true)
-    ns.ApplyChrome(panel)
     panel:Hide()
+
+    local pieces = FrameArtPieces()
+    if pieces then
+        panel.art = {}
+        for _, piece in ipairs(pieces) do
+            local texture = panel:CreateTexture(nil, "BORDER")
+            texture:SetTexture(piece.file)
+            texture:SetSize(piece.width, piece.height)
+            piece.texture = texture
+            panel.art[#panel.art + 1] = piece
+        end
+    else
+        -- No artwork to borrow; fall back to the generic chrome.
+        ns.ApplyChrome(panel)
+    end
 
     local title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
     title:SetPoint("TOPLEFT", CONTENT_LEFT + 2, -18)
