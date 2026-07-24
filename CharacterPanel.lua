@@ -5,15 +5,19 @@ local Panel = ns.Panel
 local Items = ns.Items
 local Sets = ns.Sets
 
-local PANEL_WIDTH = 200
-local PANEL_HEIGHT = 400
+local PANEL_WIDTH = 214
+local PANEL_HEIGHT = 400   -- provisional; FitToFrame anchors top and bottom
+local PANEL_MARGIN = 12    -- inset from the artwork's top and bottom edges
 local ROW_HEIGHT = 36
+local CONTENT_LEFT = 16    -- clear of the backdrop's 12px border
+local CONTENT_RIGHT = -28  -- border plus room for the scrollbar
+local ROW_WIDTH = PANEL_WIDTH + CONTENT_RIGHT - CONTENT_LEFT
 local BUTTON_SIZE = 26
 
--- The backdrop's edge texture has this much transparent padding, so the panel's
--- frame has to overlap the character frame by the same amount for the drawn
--- edges to meet. Matches the `insets` passed to SetBackdrop below.
-local BACKDROP_EDGE_INSET = 5
+-- The backdrop's edge texture is drawn inside the frame's bounds, so the panel
+-- has to overlap the character frame by this much for the two drawn edges to
+-- meet. Tracks ns.BACKDROP's left inset.
+local BACKDROP_EDGE_INSET = 11
 
 local panel, toggle, scroll, content, statusText, editButton, equipButton, saveButton
 local rows = {}
@@ -93,16 +97,16 @@ end
 
 local function BuildOptions()
     options = ns.CreatePanel("HelloGearSetOptions")
-    options:SetSize(230, 156)
+    options:SetSize(252, 182)
     options:SetClampedToScreen(true)
 
     options.title = options:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-    options.title:SetPoint("TOPLEFT", 14, -12)
+    options.title:SetPoint("TOPLEFT", 18, -18)
     options.title:SetText("Set options")
 
     options.nameBox = CreateFrame("EditBox", "HelloGearSetOptionsName", options, "InputBoxTemplate")
-    options.nameBox:SetSize(190, 20)
-    options.nameBox:SetPoint("TOPLEFT", 20, -32)
+    options.nameBox:SetSize(206, 20)
+    options.nameBox:SetPoint("TOPLEFT", 24, -40)
     options.nameBox:SetAutoFocus(false)
     options.nameBox:SetMaxLetters(40)
     options.nameBox:SetScript("OnEnterPressed", function(self)
@@ -128,7 +132,7 @@ local function BuildOptions()
     hint:SetText("Enter to rename")
 
     options.helm = CreateFrame("Button", nil, options, "UIPanelButtonTemplate")
-    options.helm:SetSize(190, 22)
+    options.helm:SetSize(206, 22)
     options.helm:SetPoint("TOPLEFT", options.nameBox, "BOTTOMLEFT", -2, -18)
     options.helm:SetScript("OnClick", function()
         local set = options.setName and Sets:Get(options.setName)
@@ -138,7 +142,7 @@ local function BuildOptions()
     end)
 
     options.cloak = CreateFrame("Button", nil, options, "UIPanelButtonTemplate")
-    options.cloak:SetSize(190, 22)
+    options.cloak:SetSize(206, 22)
     options.cloak:SetPoint("TOPLEFT", options.helm, "BOTTOMLEFT", 0, -4)
     options.cloak:SetScript("OnClick", function()
         local set = options.setName and Sets:Get(options.setName)
@@ -160,7 +164,7 @@ local function BuildOptions()
     end)
 
     options.resetIcon = CreateFrame("Button", nil, options, "UIPanelButtonTemplate")
-    options.resetIcon:SetSize(190, 22)
+    options.resetIcon:SetSize(206, 22)
     options.resetIcon:SetPoint("TOPLEFT", options.hidden, "BOTTOMLEFT", 2, -4)
     options.resetIcon:SetText("Reset icon to a set item")
     options.resetIcon:SetScript("OnClick", function()
@@ -242,7 +246,7 @@ end
 
 local function CreateRow(index)
     local row = CreateFrame("Button", nil, content)
-    row:SetSize(PANEL_WIDTH - 40, ROW_HEIGHT)
+    row:SetSize(ROW_WIDTH, ROW_HEIGHT)
     row:SetPoint("TOPLEFT", 0, -(index - 1) * ROW_HEIGHT)
     row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
 
@@ -388,6 +392,20 @@ function Panel.ComputeArtInset(frameLeft, frameRight, leftSlotLeft, rightSlotRig
     return inset
 end
 
+-- Same problem at the bottom: CharacterFrame runs well past the artwork, this
+-- time to leave room for the tab row. The tabs are the measurable thing - they
+-- sit across the artwork's bottom edge, overlapping it by a few pixels.
+local DEFAULT_ART_BOTTOM = 88   -- 512 of frame, 424 of artwork
+local TAB_OVERLAP = 10
+
+-- How far above CharacterFrame's bottom the artwork ends.
+function Panel.ComputeArtBottom(frameBottom, tabTop)
+    if not tabTop then return DEFAULT_ART_BOTTOM end
+    local offset = (tabTop + TAB_OVERLAP) - frameBottom
+    if offset < 20 or offset > 200 then return DEFAULT_ART_BOTTOM end
+    return offset
+end
+
 -- nil if the frame hasn't been laid out yet.
 local function ArtInset()
     local left, right = ColumnEdgeSlots()
@@ -416,8 +434,15 @@ local function FitToFrame()
         - BACKDROP_EDGE_INSET
         + (ns.Config:Get("dockNudge") or 0)
 
+    local tab1 = _G.CharacterFrameTab1
+    local bottom = Panel.ComputeArtBottom(CharacterFrame:GetBottom(), tab1 and tab1:GetTop())
+
+    -- Anchored top and bottom so the panel is exactly as tall as the character
+    -- frame's artwork and tracks it, rather than carrying a fixed height that
+    -- would over- or under-shoot.
     panel:ClearAllPoints()
-    panel:SetPoint("TOPLEFT", CharacterFrame, "TOPLEFT", x, -12)
+    panel:SetPoint("TOPLEFT", CharacterFrame, "TOPLEFT", x, -PANEL_MARGIN)
+    panel:SetPoint("BOTTOMLEFT", CharacterFrame, "BOTTOMLEFT", x, bottom + PANEL_MARGIN)
 end
 
 -- Prints what the addon can actually see of the character frame. Guessing at
@@ -436,8 +461,12 @@ function Panel:ReportGeometry()
     else
         ns:Print("could not measure the slot columns")
     end
-    ns:Print("panel left edge: %.1f   nudge: %d",
-        panel:GetLeft() or -1, ns.Config:Get("dockNudge") or 0)
+    local tab1 = _G.CharacterFrameTab1
+    ns:Print("frame bottom %.1f  tab top %.1f  derived artwork bottom offset %.1f",
+        CharacterFrame:GetBottom() or -1, tab1 and tab1:GetTop() or -1,
+        Panel.ComputeArtBottom(CharacterFrame:GetBottom(), tab1 and tab1:GetTop()))
+    ns:Print("panel: left %.1f  height %.1f   nudge: %d",
+        panel:GetLeft() or -1, panel:GetHeight() or -1, ns.Config:Get("dockNudge") or 0)
     ns:Print("use |cffffff00/hg dock <pixels>|r to shift it; negative moves it left")
 end
 
@@ -489,21 +518,16 @@ local function BuildPanel()
     panel:SetPoint("TOPLEFT", CharacterFrame, "TOPRIGHT", -45, -12)
     panel:SetFrameLevel(CharacterFrame:GetFrameLevel() + 1)
     panel:EnableMouse(true)
-    panel:SetBackdrop({
-        bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background-Dark",
-        edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
-        tile = true, tileSize = 32, edgeSize = 16,
-        insets = { left = 5, right = 5, top = 5, bottom = 5 },
-    })
+    panel:SetBackdrop(ns.BACKDROP)
     panel:Hide()
 
     local title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-    title:SetPoint("TOPLEFT", 14, -12)
+    title:SetPoint("TOPLEFT", CONTENT_LEFT + 2, -18)
     title:SetText("Gear Sets")
 
     equipButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-    equipButton:SetSize(84, 22)
-    equipButton:SetPoint("TOPLEFT", 12, -32)
+    equipButton:SetSize(83, 22)
+    equipButton:SetPoint("TOPLEFT", CONTENT_LEFT, -40)
     equipButton:SetText(EQUIPSET_EQUIP or "Equip")
     equipButton:SetScript("OnClick", function()
         if selected then ns.Equip:EquipSet(selected) end
@@ -516,7 +540,7 @@ local function BuildPanel()
     equipButton:SetScript("OnLeave", GameTooltip_Hide)
 
     saveButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-    saveButton:SetSize(84, 22)
+    saveButton:SetSize(83, 22)
     saveButton:SetPoint("LEFT", equipButton, "RIGHT", 4, 0)
     saveButton:SetText(SAVE or "Save")
     saveButton:SetScript("OnClick", function()
@@ -533,16 +557,16 @@ local function BuildPanel()
     saveButton:SetScript("OnLeave", GameTooltip_Hide)
 
     scroll = CreateFrame("ScrollFrame", "HelloGearCharacterPanelScroll", panel, "UIPanelScrollFrameTemplate")
-    scroll:SetPoint("TOPLEFT", 12, -60)
-    scroll:SetPoint("BOTTOMRIGHT", -28, 84)
+    scroll:SetPoint("TOPLEFT", CONTENT_LEFT, -68)
+    scroll:SetPoint("BOTTOMRIGHT", CONTENT_RIGHT, 90)
 
     content = CreateFrame("Frame", nil, scroll)
-    content:SetSize(PANEL_WIDTH - 40, 1)
+    content:SetSize(ROW_WIDTH, 1)
     scroll:SetScrollChild(content)
 
     editButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-    editButton:SetSize(PANEL_WIDTH - 24, 22)
-    editButton:SetPoint("BOTTOMLEFT", 12, 56)
+    editButton:SetSize(ROW_WIDTH, 22)
+    editButton:SetPoint("BOTTOMLEFT", CONTENT_LEFT, 62)
     editButton:SetScript("OnClick", function()
         Panel:SetEditing(not ns.Paperdoll:IsEditing())
     end)
@@ -557,14 +581,14 @@ local function BuildPanel()
     editButton:SetScript("OnLeave", GameTooltip_Hide)
 
     local newButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-    newButton:SetSize(PANEL_WIDTH - 24, 22)
-    newButton:SetPoint("BOTTOMLEFT", 12, 32)
+    newButton:SetSize(ROW_WIDTH, 22)
+    newButton:SetPoint("BOTTOMLEFT", CONTENT_LEFT, 38)
     newButton:SetText("New set from worn gear")
     newButton:SetScript("OnClick", function() StaticPopup_Show("HELLOGEAR_NEW_SET") end)
 
     statusText = panel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
-    statusText:SetPoint("BOTTOMLEFT", 14, 14)
-    statusText:SetPoint("BOTTOMRIGHT", -14, 14)
+    statusText:SetPoint("BOTTOMLEFT", CONTENT_LEFT + 2, 20)
+    statusText:SetPoint("BOTTOMRIGHT", CONTENT_RIGHT + 12, 20)
     statusText:SetJustifyH("LEFT")
     statusText:SetWordWrap(false)
 

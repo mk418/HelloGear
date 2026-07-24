@@ -145,7 +145,12 @@ That 20 isn't hardcoded — it's only the fallback. Both the button and the pane
 
 The panel's *horizontal* position comes from that edge, but its *vertical* position has to come from the top of the frame rather than from a slot button most of the way down it — so it anchors to `CharacterFrame`'s `TOPLEFT` with a measured x, not to a slot.
 
-One subtlety worth writing down: docking flush means overlapping. The backdrop's edge texture carries ~5px of transparent padding, so the panel's frame has to sit that much *inside* the artwork for the drawn edges to meet. Getting this wrong reads as a small gap that looks like a positioning bug but isn't.
+Vertically it's the same problem at the other end: the frame runs past the artwork again, this time to leave room for the tab row. The tabs are the measurable thing — they sit across the artwork's bottom edge — so the panel anchors top *and* bottom and comes out exactly as tall as the character frame, tracking it rather than carrying a fixed height that would over- or under-shoot.
+
+Two subtleties worth writing down:
+
+- **Docking flush means overlapping.** The backdrop's edge texture is drawn inside the frame's bounds, so the panel has to sit ~11px *inside* the artwork for the two drawn edges to meet. Getting this wrong reads as a small gap that looks like a positioning bug but isn't.
+- **`edgeSize` has to match the texture.** `UI-DialogBox-Border` is drawn for a 32px edge. At 16 the corner pieces get squashed and the chamfered "dulled point" the rest of the Classic UI has at its corners squares off, which is enough to make the panel read as belonging to a different UI. All of the addon's panels share `ns.BACKDROP` so they can't drift apart on this.
 
 Measuring rather than hardcoding also means the panel docks correctly against a frame some other addon has resized, and it's re-measured on every `PaperDollFrame` show rather than once at login. The arithmetic is `Panel.ComputeArtInset`, kept free of frame lookups so `Tests/test_geometry.lua` can exercise it against the real measured numbers. `/hg dock` reports what the addon sees and `/hg dock <pixels>` shifts it, saved per account, for the case where the symmetry assumption doesn't hold on someone's setup.
 

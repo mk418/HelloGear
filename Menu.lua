@@ -6,7 +6,9 @@ local Items = ns.Items
 local Sets = ns.Sets
 
 local ROW_HEIGHT = 20
-local WIDTH = 176
+local WIDTH = 190
+local INSET = 15   -- clear of the backdrop's 12px border
+local ROW_WIDTH = WIDTH - INSET * 2
 local MAX_VISIBLE = 14
 
 local frame, scroll, content, footer
@@ -19,14 +21,20 @@ local showHidden = false
 -- UI codebase, and this needs about twenty lines of frame anyway.
 --------------------------------------------------------------------------
 
+-- Blizzard's stock dialog backdrop, at the numbers it's drawn for. The edge
+-- texture's corner pieces only read as the chamfered "dulled point" the rest
+-- of the UI has at the full 32px edge size; shrink it and the corners square
+-- off into something that looks like a different UI.
+ns.BACKDROP = {
+    bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background-Dark",
+    edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+    tile = true, tileSize = 32, edgeSize = 32,
+    insets = { left = 11, right = 12, top = 12, bottom = 11 },
+}
+
 local function CreatePanel(name, parent)
     local f = CreateFrame("Frame", name, parent or UIParent, "BackdropTemplate")
-    f:SetBackdrop({
-        bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background-Dark",
-        edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
-        tile = true, tileSize = 32, edgeSize = 16,
-        insets = { left = 5, right = 5, top = 5, bottom = 5 },
-    })
+    f:SetBackdrop(ns.BACKDROP)
     f:SetFrameStrata("DIALOG")
     -- Explicit level so the click-away catcher (level 1, same strata) is
     -- always underneath rather than depending on creation order.
@@ -74,7 +82,7 @@ end
 
 local function CreateRow(index)
     local row = CreateFrame("Button", nil, content)
-    row:SetSize(WIDTH - 24, ROW_HEIGHT)
+    row:SetSize(ROW_WIDTH, ROW_HEIGHT)
     row:SetPoint("TOPLEFT", 0, -(index - 1) * ROW_HEIGHT)
     row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
 
@@ -115,16 +123,16 @@ function Menu:Init()
     frame:SetClampedToScreen(true)
 
     scroll = CreateFrame("ScrollFrame", "HelloGearMenuScroll", frame, "UIPanelScrollFrameTemplate")
-    scroll:SetPoint("TOPLEFT", 10, -10)
-    scroll:SetWidth(WIDTH - 24)
+    scroll:SetPoint("TOPLEFT", INSET, -INSET)
+    scroll:SetWidth(ROW_WIDTH)
 
     content = CreateFrame("Frame", nil, scroll)
-    content:SetSize(WIDTH - 24, 1)
+    content:SetSize(ROW_WIDTH, 1)
     scroll:SetScrollChild(content)
 
     footer = CreateFrame("Button", nil, frame)
-    footer:SetSize(WIDTH - 24, ROW_HEIGHT)
-    footer:SetPoint("BOTTOMLEFT", 10, 10)
+    footer:SetSize(ROW_WIDTH, ROW_HEIGHT)
+    footer:SetPoint("BOTTOMLEFT", INSET, INSET)
     footer.label = footer:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
     footer.label:SetPoint("LEFT", 2, 0)
     footer.label:SetText("Manage sets...")
@@ -207,7 +215,7 @@ function Menu:Populate()
     local visible = math.min(math.max(#names, 1), MAX_VISIBLE)
     content:SetHeight(math.max(#names * ROW_HEIGHT, 1))
     scroll:SetHeight(visible * ROW_HEIGHT)
-    frame:SetHeight(visible * ROW_HEIGHT + ROW_HEIGHT + 30)
+    frame:SetHeight(visible * ROW_HEIGHT + ROW_HEIGHT + INSET * 2 + 8)
 end
 
 function Menu:Show(anchorFrame)

@@ -6,7 +6,9 @@ local Items = ns.Items
 local API = ns.API
 
 local ROW_HEIGHT = 22
-local WIDTH = 210
+local WIDTH = 224
+local INSET = 15   -- clear of the backdrop's 12px border
+local ROW_WIDTH = WIDTH - INSET * 2
 local MAX_VISIBLE = 12
 
 local flyout, scroll, content
@@ -76,7 +78,7 @@ end
 
 local function CreateRow(index)
     local row = CreateFrame("Button", "HelloGearSlotRow" .. index, content)
-    row:SetSize(WIDTH - 24, ROW_HEIGHT)
+    row:SetSize(ROW_WIDTH, ROW_HEIGHT)
     row:SetPoint("TOPLEFT", 0, -(index - 1) * ROW_HEIGHT)
 
     row.icon = row:CreateTexture(nil, "ARTWORK")
@@ -138,14 +140,14 @@ local function BuildFlyout()
     flyout:SetClampedToScreen(true)
 
     flyout.title = flyout:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-    flyout.title:SetPoint("TOPLEFT", 12, -10)
+    flyout.title:SetPoint("TOPLEFT", INSET + 2, -INSET)
 
     scroll = CreateFrame("ScrollFrame", "HelloGearSlotFlyoutScroll", flyout, "UIPanelScrollFrameTemplate")
-    scroll:SetPoint("TOPLEFT", 10, -26)
-    scroll:SetWidth(WIDTH - 24)
+    scroll:SetPoint("TOPLEFT", INSET, -(INSET + 18))
+    scroll:SetWidth(ROW_WIDTH)
 
     content = CreateFrame("Frame", nil, scroll)
-    content:SetSize(WIDTH - 24, 1)
+    content:SetSize(ROW_WIDTH, 1)
     scroll:SetScrollChild(content)
 
     flyout:SetScript("OnShow", function()
@@ -244,7 +246,7 @@ local function Populate(slotID, mode)
     local visible = math.min(math.max(index, 1), MAX_VISIBLE)
     content:SetHeight(math.max(index * ROW_HEIGHT, 1))
     scroll:SetHeight(visible * ROW_HEIGHT)
-    flyout:SetHeight(visible * ROW_HEIGHT + 42)
+    flyout:SetHeight(visible * ROW_HEIGHT + INSET * 2 + 20)
 end
 
 function Paperdoll:Open(slotID, anchor, mode)

@@ -71,6 +71,30 @@ check(ComputeArtInset(0, 384, -50, 343), FALLBACK, "left column outside the fram
 check(ComputeArtInset(0, 384, 0, 0), ComputeArtInset(0, 384, 21, 343),
     "fallback matches the measured frame")
 
+--------------------------------------------------------------------------
+-- Vertical fit: how far above CharacterFrame's bottom the artwork ends.
+-- Measured from the tab row, which sits across the artwork's bottom edge.
+--------------------------------------------------------------------------
+
+local ComputeArtBottom = ns.Panel.ComputeArtBottom
+
+-- Stock frame: 512 tall holding 424 of artwork, so the artwork ends 88 above
+-- the frame's bottom. Tabs overlap that edge by ~10, putting their top at 78.
+check(ComputeArtBottom(0, 78), 88, "stock tab row")
+
+-- Position-independent, like the horizontal fit.
+check(ComputeArtBottom(400, 478), 88, "frame moved up the screen")
+
+-- No tab row to measure gives the stock answer rather than an error.
+check(ComputeArtBottom(0, nil), 88, "missing tab row falls back")
+
+-- Nonsense in, fallback out: tabs above the frame, or absurdly far up it.
+check(ComputeArtBottom(0, -50), 88, "tab below the frame bottom")
+check(ComputeArtBottom(0, 500), 88, "tab most of the way up the frame")
+
+-- A genuinely different tab position is followed, not snapped to the default.
+check(ComputeArtBottom(0, 110), 120, "taller tab offset is respected")
+
 print("")
 if failures == 0 then
     print(("ALL %d CHECKS PASSED"):format(tests))
