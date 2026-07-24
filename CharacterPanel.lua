@@ -10,12 +10,10 @@ local PANEL_HEIGHT = 400
 local ROW_HEIGHT = 36
 local BUTTON_SIZE = 26
 
--- Distance from the right slot column's right edge out to where the panel
--- should start. That's the frame's own margin (~22px on the stock paperdoll)
--- less the few pixels of transparent padding baked into the panel's backdrop
--- border, so the drawn edges meet instead of leaving a seam. /hg dock nudges
--- it if it lands wrong.
-local SLOT_TO_EDGE = 16
+-- The backdrop's edge texture has this much transparent padding, so the panel's
+-- frame has to overlap the character frame by the same amount for the drawn
+-- edges to meet. Matches the `insets` passed to SetBackdrop below.
+local BACKDROP_EDGE_INSET = 5
 
 local panel, toggle, scroll, content, statusText, editButton, equipButton, saveButton
 local rows = {}
@@ -372,9 +370,11 @@ local function ColumnEdgeSlots()
     return left, right
 end
 
--- The stock 384-vs-338 difference, used when the measurement doesn't make
--- sense. Only a fallback: the whole point is not to rely on it.
-local DEFAULT_ART_INSET = -46
+-- Used when the measurement doesn't make sense. Only a fallback; the whole
+-- point is not to rely on it. Measured on 1.15.9: CharacterFrame spans 0..384,
+-- the slot columns run 21..343, so the artwork ends around 364 and the frame
+-- carries ~20px of dead space past it.
+local DEFAULT_ART_INSET = -20
 
 -- Pure geometry, separated out so it can be tested without a character frame
 -- to measure. Returns the offset from the frame's right edge to the artwork's
@@ -406,19 +406,18 @@ local function FitToFrame()
         toggle:SetPoint("BOTTOMRIGHT", rightSlot, "TOPRIGHT", 0, 8)
     end
 
-    -- The right slot column's own right edge is the one measurement here
-    -- that's known good - the button sits on it and lands correctly. So the
-    -- panel docks from that edge too, rather than from CharacterFrame's,
-    -- which is a good way outside the visible artwork.
-    local nudge = ns.Config:Get("dockNudge") or 0
-    if rightSlot then
-        panel:ClearAllPoints()
-        panel:SetPoint("TOPLEFT", rightSlot, "TOPRIGHT", SLOT_TO_EDGE + nudge, 12)
-    else
-        local inset = ArtInset() or DEFAULT_ART_INSET
-        panel:ClearAllPoints()
-        panel:SetPoint("TOPLEFT", CharacterFrame, "TOPRIGHT", inset + 1 + nudge, -12)
-    end
+    -- Anchored to the frame's TOPLEFT with a measured x rather than to its
+    -- TOPRIGHT: the horizontal position comes from the artwork's edge, but the
+    -- vertical has to come from the top of the frame, not from a slot button
+    -- most of the way down it.
+    local inset = ArtInset() or DEFAULT_ART_INSET
+    local artRight = CharacterFrame:GetRight() + inset
+    local x = (artRight - CharacterFrame:GetLeft())
+        - BACKDROP_EDGE_INSET
+        + (ns.Config:Get("dockNudge") or 0)
+
+    panel:ClearAllPoints()
+    panel:SetPoint("TOPLEFT", CharacterFrame, "TOPLEFT", x, -12)
 end
 
 -- Prints what the addon can actually see of the character frame. Guessing at

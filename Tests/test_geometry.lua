@@ -43,32 +43,33 @@ local function check(actual, expected, msg)
     end
 end
 
--- Stock Classic layout. Frame spans x 0..384; artwork is 338 wide, so its
--- right edge is at 338 and the inset is -46. The left slot column starts 20px
--- inside the artwork, and the right column ends 20px inside it at 318.
-check(ComputeArtInset(0, 384, 20, 318), -46, "stock character frame")
+-- Real numbers, read off a 1.15.9 client with /hg dock: CharacterFrame spans
+-- 0..384 and the slot columns run 21..343, so the artwork's right edge is at
+-- 343 + 21 = 364 and the frame carries 20px of dead space past it.
+local FALLBACK = -20
+check(ComputeArtInset(0, 384, 21, 343), -20, "measured 1.15.9 character frame")
 
 -- Same frame moved across the screen: the answer is a difference of edges, so
 -- it must not depend on where the frame sits.
-check(ComputeArtInset(500, 884, 520, 818), -46, "frame moved right")
-check(ComputeArtInset(-300, 84, -280, 18), -46, "frame moved off the left")
+check(ComputeArtInset(500, 884, 521, 843), -20, "frame moved right")
+check(ComputeArtInset(-300, 84, -279, 43), -20, "frame moved off the left")
 
 -- A frame whose artwork fills it completely - a modern template, or another
--- addon having resized things - should dock flush, not 46px away.
-check(ComputeArtInset(0, 338, 20, 318), 0, "artwork fills the frame")
+-- addon having resized things - should dock flush, not 20px away.
+check(ComputeArtInset(0, 364, 21, 343), 0, "artwork fills the frame")
 
--- Narrower padding still measures correctly rather than snapping to a guess.
-check(ComputeArtInset(0, 384, 30, 334), -20, "20px of padding")
+-- Wider padding still measures correctly rather than snapping to a guess.
+check(ComputeArtInset(0, 384, 20, 318), -46, "46px of padding")
 
 -- Nonsense in, fallback out.
-check(ComputeArtInset(0, 384, 20, 900), -46, "right column past the frame edge")
-check(ComputeArtInset(0, 384, 20, 0), -46, "right column left of the frame")
-check(ComputeArtInset(0, 384, -50, 318), -46, "left column outside the frame")
+check(ComputeArtInset(0, 384, 21, 900), FALLBACK, "right column past the frame edge")
+check(ComputeArtInset(0, 384, 21, 0), FALLBACK, "right column left of the frame")
+check(ComputeArtInset(0, 384, -50, 343), FALLBACK, "left column outside the frame")
 
--- The fallback is the stock inset, so a total measurement failure still lands
--- the panel in the right place on an unmodified frame.
-check(ComputeArtInset(0, 384, 0, 0), ComputeArtInset(0, 384, 20, 318),
-    "fallback matches the stock measurement")
+-- The fallback is the measured inset, so a total measurement failure still
+-- lands the panel in the right place on an unmodified frame.
+check(ComputeArtInset(0, 384, 0, 0), ComputeArtInset(0, 384, 21, 343),
+    "fallback matches the measured frame")
 
 print("")
 if failures == 0 then
