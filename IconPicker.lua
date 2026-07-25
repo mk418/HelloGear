@@ -38,6 +38,14 @@ local function TextureName(texture)
     return name and name:lower() or nil
 end
 
+-- Names arrive in three shapes - "spell_shadow_shadowbolt", "Chromatic Boots",
+-- "Shadow Bolt" - and nobody types the separators the same way. Matching
+-- happens on a form with all of them stripped, so any of those find each other.
+local function SearchKey(name)
+    if not name then return nil end
+    return (name:lower():gsub("[^%a%d]", ""))
+end
+
 -- Two ways to ask, and which one this client answers decides whether searching
 -- is possible at all: the indexed call yields texture paths, whose last
 -- segment is a name, while the table-filling one yields bare file IDs, which
@@ -74,7 +82,7 @@ local function AppendMacroIcons(list, seen)
             -- ns.IconNames is the generated file-ID lookup, shipped only if
             -- this client needs it; without it a bare ID has no name.
             local name = TextureName(icon) or (ns.IconNames and ns.IconNames[icon])
-            list[#list + 1] = { texture = icon, name = name }
+            list[#list + 1] = { texture = icon, name = name, search = SearchKey(name) }
         end
     end
 end
@@ -88,9 +96,11 @@ local function AppendNamedIcons(list, seen, gearIDs)
     local function add(texture, name)
         if texture and not seen[texture] then
             seen[texture] = true
+            local resolved = (name and name ~= "" and name:lower()) or TextureName(texture)
             list[#list + 1] = {
                 texture = texture,
-                name = (name and name ~= "" and name:lower()) or TextureName(texture),
+                name = resolved,
+                search = SearchKey(resolved),
             }
         end
     end
@@ -185,13 +195,13 @@ local function SetOffset(value)
 end
 
 local function Filter(text)
-    text = (text or ""):lower():gsub("^%s+", ""):gsub("%s+$", "")
+    local key = SearchKey(text)
     shown = {}
-    if text == "" then
+    if not key or key == "" then
         for _, entry in ipairs(entries) do shown[#shown + 1] = entry end
     else
         for _, entry in ipairs(entries) do
-            if entry.name and entry.name:find(text, 1, true) then
+            if entry.search and entry.search:find(key, 1, true) then
                 shown[#shown + 1] = entry
             end
         end

@@ -27,6 +27,7 @@ That single break isn't worth a fork. The interesting part is that the surroundi
 - **Equipping** — one-click equip, toggle (equip / put back what it displaced), single-item swaps.
 - **ItemRack import** — sets, icons, hidden flags, helm/cloak toggles, deliberate-empty slots.
 - **Bank** — fetch a set's gear out of the bank, or put it away, while the bank window is open.
+- **Icon picker** — the set's own gear first, then every icon the client has, searchable by name.
 - **Set menu** — minimap button opens a list; click equips, shift-click toggles, right-click restores.
 - **Character-sheet panel** — a button on the character frame opens a docked gear-set panel, and the paperdoll itself becomes the set editor.
 - **Paperdoll slot menus** — every character-sheet slot gets a menu of the alternatives in your bags, with cooldown swirls.
@@ -58,6 +59,8 @@ HelloGear/
 ├── Paperdoll.lua       -- everything attached to character-sheet slots:
 │                          swap flyouts and the set-editing overlays
 ├── CharacterPanel.lua  -- the docked gear-set panel and its toggle button
+├── IconPicker.lua      -- choosing a set's icon
+├── IconNames.lua       -- generated file-ID to icon-name table (see below)
 └── Tests/              -- headless harnesses; not listed in the TOC
 ```
 
@@ -198,6 +201,18 @@ One small thing this makes possible: when a swap can't find something and the ba
 
 ---
 
+## Searching icons
+
+Classic Era reports its icon list as bare file IDs, and no API turns one back into a name — so out of the box there is nothing to search against. Two things fix that between them.
+
+Anything whose icon can be named at runtime is: the set's own gear, everything else you're carrying, and every spell you know, all named from the item or spell rather than the texture. That alone took searching from twenty icons to several hundred, and needs no data shipped.
+
+The rest come from `IconNames.lua`, generated from the community listfile and filtered to the 1106 icons this client actually reports — `/hg dumpicons` writes that list to saved variables for filtering. The full listfile covers all of retail and would be an order of magnitude larger for nothing. File IDs are stable, so a patch adding icons leaves the table missing them rather than naming anything wrongly; regenerating is the same two steps.
+
+Matching happens on a form with every separator stripped, because the three sources spell things differently — `spell_shadow_shadowbolt`, `Chromatic Boots`, `Shadow Bolt` — and nobody types them the same way either.
+
+---
+
 ## The ItemRack import
 
 `ItemRackUser` is a per-character saved variable, so it only exists in memory when ItemRack itself is installed and enabled — and the point of this addon is that ItemRack is about to be turned off.
@@ -223,6 +238,7 @@ lua Tests/test_import.lua "<path to a WTF .../SavedVariables/ItemRack.lua>"
 ```
 
 - **`test_import.lua`** loads a real ItemRack saved-variable file — it's valid Lua — and checks that every set round-trips to the same four fields, re-derived independently from the raw ItemRack strings. Also covers hidden flags, helm/cloak flags, `~`-prefixed internal sets being skipped, and import idempotency.
+- **`test_iconsearch.lua`** checks the icon search key against the shipped name table: that separators and case don't matter, and that a query spelled any of the three ways finds the others.
 - **`test_geometry.lua`** checks the character-frame fitting arithmetic — stock layout, a moved frame, artwork that fills its frame, and the nonsense-in-fallback-out cases.
 - **`test_equip.lua`** runs the real swap engine against a simulated character: worn slots, five bags, an item cursor, and client rules for two-handers, invalid slots and full bags. Covers ring cross-swaps, two-hander transitions in both directions, deliberate empties, enchant preference, random-suffix rejection, missing gear, toggle round-trips and full 15-slot swaps.
 

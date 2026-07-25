@@ -20,4 +20,5 @@ Menu.lua
 Minimap.lua
 Paperdoll.lua
 CharacterPanel.lua
+IconNames.lua
 IconPicker.lua
