@@ -14,7 +14,10 @@ local CONTENT_RIGHT = -34  -- border, plus room for the scrollbar inside it
 -- its own window standing beside the character sheet, the way the guild
 -- information window does - not a continuation of it - so the two borders stay
 -- visibly separate rather than sharing a seam.
-local PANEL_GAP = 6
+--
+-- One pixel, arrived at in game: the borders read as adjacent rather than
+-- joined, without the panel looking flung off to the side.
+local PANEL_GAP = 1
 local ROW_WIDTH = PANEL_WIDTH + CONTENT_RIGHT - CONTENT_LEFT
 local BUTTON_SIZE = 26
 

@@ -45,6 +45,14 @@ function Config:Init()
     HelloGearCharDB = HelloGearCharDB or {}
     applyDefaults(HelloGearDB, accountDefaults)
     applyDefaults(HelloGearCharDB, charDefaults)
+
+    -- The dock nudge existed to calibrate the panel's gap by hand. That value
+    -- is the default now, so a saved nudge would apply on top of it and put
+    -- the panel back where it was. Dropped once, not every login.
+    if not HelloGearDB.dockCalibrated then
+        HelloGearDB.dockNudge = nil
+        HelloGearDB.dockCalibrated = true
+    end
 end
 
 function Config:Get(key)
