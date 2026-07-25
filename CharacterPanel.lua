@@ -201,6 +201,9 @@ local function BuildOptions()
     end)
     options:SetScript("OnHide", function()
         if options.closer then options.closer:Hide() end
+        -- The picker belongs to this popout; leaving it floating alone after
+        -- its parent has gone is just debris.
+        ns.IconPicker:Close()
     end)
 end
 
@@ -792,6 +795,7 @@ local function BuildPanel()
     CharacterFrame:HookScript("OnHide", function()
         Panel:SetEditing(false)
         if options then options:Hide() end
+        ns.IconPicker:Close()
     end)
 end
 

@@ -15,7 +15,7 @@ local buttons = {}
 local entries = {}      -- everything: { texture = , name = } with name possibly nil
 local shown = {}        -- what the grid is currently showing
 local offset = 0
-local onPick, currentIcon, searchable
+local onPick, currentIcon, searchable, namedCount
 
 --------------------------------------------------------------------------
 -- The icon list
@@ -38,6 +38,11 @@ local function TextureName(texture)
     return name and name:lower() or nil
 end
 
+-- Two ways to ask, and which one this client answers decides whether searching
+-- is possible at all: the indexed call yields texture paths, whose last
+-- segment is a name, while the table-filling one yields bare file IDs, which
+-- carry nothing to match against. So the indexed call is tried first, and only
+-- kept if it really does hand back strings.
 local function AppendMacroIcons(list, seen)
     local function add(icon)
         if icon and not seen[icon] then
@@ -46,23 +51,24 @@ local function AppendMacroIcons(list, seen)
         end
     end
 
-    if type(_G.GetMacroIcons) == "function" then
-        local fetched = {}
-        -- Only treat this as the answer if it actually returned something; a
-        -- call that succeeds and fills nothing shouldn't stop us trying the
-        -- older API.
-        if pcall(_G.GetMacroIcons, fetched) and #fetched > 0 then
-            for _, icon in ipairs(fetched) do add(icon) end
-            return
+    if type(_G.GetNumMacroIcons) == "function" and type(_G.GetMacroIconInfo) == "function" then
+        local ok, count = pcall(_G.GetNumMacroIcons)
+        if ok and count and count > 0 then
+            local fine, first = pcall(_G.GetMacroIconInfo, 1)
+            if fine and type(first) == "string" then
+                for index = 1, count do
+                    local got, icon = pcall(_G.GetMacroIconInfo, index)
+                    if got then add(icon) end
+                end
+                return
+            end
         end
     end
 
-    if type(_G.GetNumMacroIcons) == "function" and type(_G.GetMacroIconInfo) == "function" then
-        local ok, count = pcall(_G.GetNumMacroIcons)
-        if not ok or not count then return end
-        for index = 1, count do
-            local fine, icon = pcall(_G.GetMacroIconInfo, index)
-            if fine then add(icon) end
+    if type(_G.GetMacroIcons) == "function" then
+        local fetched = {}
+        if pcall(_G.GetMacroIcons, fetched) and #fetched > 0 then
+            for _, icon in ipairs(fetched) do add(icon) end
         end
     end
 end
@@ -247,8 +253,20 @@ local function Build()
 end
 
 function IconPicker:UpdateHeader()
-    header:SetText(("|cffffd200Choose an icon|r  |cff808080%d shown of %d|r")
-        :format(#shown, #entries))
+    if search:GetText() ~= "" then
+        header:SetText(("|cffffd200Choose an icon|r  |cff808080%d shown of %d|r")
+            :format(#shown, #entries))
+    elseif not searchable then
+        header:SetText(("|cffffd200Choose an icon|r  |cffff8080%d, none searchable|r")
+            :format(#entries))
+    elseif namedCount < #entries then
+        -- Being explicit beats a search box that quietly only covers part of
+        -- the grid and reads as broken.
+        header:SetText(("|cffffd200Choose an icon|r  |cff808080%d, %d searchable|r")
+            :format(#entries, namedCount))
+    else
+        header:SetText(("|cffffd200Choose an icon|r  |cff808080%d icons|r"):format(#entries))
+    end
 end
 
 function IconPicker:Open(set, anchor, callback)
@@ -258,17 +276,16 @@ function IconPicker:Open(set, anchor, callback)
     onPick = callback
     currentIcon = set.icon
 
-    local named
-    entries, named = BuildEntries(set)
-    searchable = named > 0
+    entries, namedCount = BuildEntries(set)
+    searchable = namedCount > 0
 
     search:SetText("")
-    search:SetEnabled(searchable)
+    if searchable then search:Enable() else search:Disable() end
     if searchable then
         search:SetScript("OnEnter", function(self)
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
             GameTooltip:AddLine("Search icon names", 1, 1, 1)
-            GameTooltip:AddLine(("%d of %d icons have a name to search"):format(named, #entries),
+            GameTooltip:AddLine(("%d of %d icons have a name to search"):format(namedCount, #entries),
                 0.7, 0.7, 0.7)
             GameTooltip:Show()
         end)
@@ -297,7 +314,9 @@ function IconPicker:Open(set, anchor, callback)
 
     frame:ClearAllPoints()
     if anchor then
-        frame:SetPoint("TOPLEFT", anchor, "TOPRIGHT", 6, 0)
+        -- Both frames' borders are drawn inside their bounds, so the gap you
+        -- see is this offset plus both insets. Negative to bring them close.
+        frame:SetPoint("TOPLEFT", anchor, "TOPRIGHT", -(ns.CHROME_INSET * 2) + 4, 0)
     else
         frame:SetPoint("CENTER")
     end
