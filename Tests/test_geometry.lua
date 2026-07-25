@@ -95,6 +95,40 @@ check(ComputeArtBottom(0, 500), 88, "tab most of the way up the frame")
 -- A genuinely different tab position is followed, not snapped to the default.
 check(ComputeArtBottom(0, 110), 120, "taller tab offset is respected")
 
+--------------------------------------------------------------------------
+-- Slicing the character frame's artwork. The quadrants are laid out
+-- 384x512: top-left at (0,0) 256x256, top-right at (256,0) 128x256.
+--------------------------------------------------------------------------
+
+local TexCoords = ns.Panel.TexCoords
+local topLeft  = { x = 0,   y = 0, width = 256, height = 256 }
+local topRight = { x = 256, y = 0, width = 128, height = 256 }
+local bottomRight = { x = 256, y = -256, width = 128, height = 256 }
+
+local function coords(...)
+    return string.format("%.4f %.4f %.4f %.4f", ...)
+end
+
+-- An 11px strip along the top border, sampled from a plain run of it.
+check(coords(TexCoords(topLeft, 120, 240, 0, 11)),
+    coords(120/256, 240/256, 0, 11/256), "top border strip")
+
+-- The right border, 11px wide, ending at the artwork's visible edge of 359.
+check(coords(TexCoords(topRight, 348, 359, 60, 62)),
+    coords((348-256)/128, (359-256)/128, 60/256, 62/256), "right border strip")
+
+-- Every coordinate has to land inside the texture, or the slice samples
+-- neighbouring artwork - which is how the paperdoll's slot recesses got in.
+local l, r, t, b = TexCoords(topRight, 348, 359, 0, 11)
+check(l >= 0 and l <= 1 and r >= 0 and r <= 1, true, "right strip u in range")
+check(t >= 0 and t <= 1 and b >= 0 and b <= 1, true, "right strip v in range")
+
+-- A bottom quadrant is offset 256 down, so depth has to be measured from the
+-- artwork's top, not the quadrant's.
+check(coords(TexCoords(bottomRight, 348, 359, 300, 311)),
+    coords((348-256)/128, (359-256)/128, (300-256)/256, (311-256)/256),
+    "bottom quadrant depth is relative to the artwork")
+
 print("")
 if failures == 0 then
     print(("ALL %d CHECKS PASSED"):format(tests))

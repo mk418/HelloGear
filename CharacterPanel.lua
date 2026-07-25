@@ -471,11 +471,12 @@ end
 
 -- Frame coordinates -> texture coordinates within one quadrant. `depth` is
 -- measured downward from the artwork's top, the way the layout offsets are.
-local function TexCoords(quad, x1, x2, depth1, depth2)
+function Panel.TexCoords(quad, x1, x2, depth1, depth2)
     local quadTop = -quad.y
     return (x1 - quad.x) / quad.width, (x2 - quad.x) / quad.width,
            (depth1 - quadTop) / quad.height, (depth2 - quadTop) / quad.height
 end
+local TexCoords = Panel.TexCoords
 
 local function Slice(parent, quad, x1, x2, depth1, depth2, flipVertically)
     local texture = parent:CreateTexture(nil, "BORDER")
@@ -519,7 +520,11 @@ local function BuildChrome(target)
     bottom:SetPoint("BOTTOMLEFT")
     bottom:SetPoint("TOPRIGHT", target, "BOTTOMRIGHT", -B, B)
 
+    -- Both anchors are on the same edge, so they fix the height but say
+    -- nothing about the width; without SetWidth the texture falls back to its
+    -- natural 128px and smears a stretched border across the panel.
     local right = keep(Slice(target, quads.topRight, R - B, R, CLEAN_RIGHT_Y1, CLEAN_RIGHT_Y2))
+    right:SetWidth(B)
     right:SetPoint("TOPRIGHT", target, "TOPRIGHT", 0, -B)
     right:SetPoint("BOTTOMRIGHT", target, "BOTTOMRIGHT", 0, B)
 
