@@ -2,7 +2,6 @@ local ADDON_NAME, ns = ...
 
 ns.Menu = {}
 local Menu = ns.Menu
-local Items = ns.Items
 local Sets = ns.Sets
 
 local ROW_HEIGHT = 20
@@ -90,32 +89,7 @@ ns.CreatePanel = CreatePanel
 --------------------------------------------------------------------------
 
 local function SetTooltip(self)
-    local set = Sets:Get(self.setName)
-    if not set then return end
-
-    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-    GameTooltip:AddLine(self.setName, 1, 1, 1)
-    if Sets:IsEquipped(self.setName) then
-        GameTooltip:AddLine("Equipped", 0.5, 1, 0.5)
-    end
-    GameTooltip:AddLine(" ")
-
-    for _, def in ipairs(ns.SLOTS) do
-        local gearID = set.equip[def.id]
-        if gearID then
-            local right
-            if gearID == ns.EMPTY then
-                right = "|cff808080(empty)|r"
-            else
-                local itemName, _, _, quality = Items.GetInfo(gearID)
-                local color = quality and ITEM_QUALITY_COLORS[quality]
-                right = (color and color.hex or "|cffffffff") .. (itemName or "...") .. "|r"
-            end
-            GameTooltip:AddDoubleLine("|cffb0b0b0" .. def.label .. "|r", right)
-        end
-    end
-
-    GameTooltip:AddLine(" ")
+    ns.SetTooltip(self, self.setName, "ANCHOR_RIGHT")
     GameTooltip:AddLine("Click to equip", 0.6, 0.6, 0.6)
     GameTooltip:AddLine("Shift-click to toggle on/off", 0.6, 0.6, 0.6)
     GameTooltip:AddLine("Right-click to put back what it replaced", 0.6, 0.6, 0.6)
@@ -233,14 +207,25 @@ function Menu:Populate()
     local names = Sets:Names(showHidden)
     local hiddenCount = #Sets:Names(true) - #Sets:Names(false)
 
+    local index = Sets:InventoryIndex()
     for i, name in ipairs(names) do
         local row = rows[i] or CreateRow(i)
+        local set = Sets:Get(name)
         row.setName = name
-        row.icon:SetTexture(Sets:GetIcon(Sets:Get(name)))
+        row.icon:SetTexture(Sets:GetIcon(set))
 
         local equipped = Sets:IsEquipped(name)
-        row.label:SetText((equipped and "|cff80ff80" or "|cffffffff") .. name .. "|r")
-        row.icon:SetDesaturated(Sets:Get(name).hidden and not equipped or false)
+        local _, missingCount = Sets:MissingSlots(set, index)
+        local color
+        if equipped then
+            color = "|cff80ff80"
+        elseif missingCount > 0 then
+            color = "|cffff4040"
+        else
+            color = "|cffffffff"
+        end
+        row.label:SetText(color .. name .. "|r")
+        row.icon:SetDesaturated(set.hidden and not equipped or false)
         row:Show()
     end
     for i = #names + 1, #rows do

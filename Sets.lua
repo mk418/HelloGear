@@ -192,6 +192,52 @@ function Sets:IsEquipped(name, exact)
 end
 
 --------------------------------------------------------------------------
+-- Where a set's gear is
+--
+-- Built once per refresh and handed to every set, rather than each one
+-- scanning the bags for itself.
+--------------------------------------------------------------------------
+
+function Sets:InventoryIndex()
+    local carried, banked = {}, {}
+    for _, gearID in pairs(Items.GetWornSet()) do
+        local key = Items.AvailabilityKey(gearID)
+        if key then carried[key] = true end
+    end
+    for _, entry in ipairs(Items.ScanBags()) do
+        local key = Items.AvailabilityKey(entry.gearID)
+        if key then carried[key] = true end
+    end
+    -- Only readable with the bank window open; when it isn't, banked gear is
+    -- indistinguishable from gear you no longer own.
+    if ns.Bank and ns.Bank:IsOpen() then
+        for _, entry in ipairs(Items.ScanBank()) do
+            local key = Items.AvailabilityKey(entry.gearID)
+            if key then banked[key] = true end
+        end
+    end
+    return { carried = carried, banked = banked }
+end
+
+-- slot -> "bank" | "gone", for every slot whose item isn't on you or in your
+-- bags. Both count as missing for equipping; the distinction is only there so
+-- a tooltip can say where the thing went.
+function Sets:MissingSlots(set, index)
+    index = index or self:InventoryIndex()
+    local missing, count = {}, 0
+    for slot, wanted in pairs(set.equip) do
+        if wanted ~= ns.EMPTY then
+            local key = Items.AvailabilityKey(wanted)
+            if key and not index.carried[key] then
+                missing[slot] = index.banked[key] and "bank" or "gone"
+                count = count + 1
+            end
+        end
+    end
+    return missing, count
+end
+
+--------------------------------------------------------------------------
 -- Slot states
 --
 -- What a set does with one slot, and the cycle the paperdoll editor walks

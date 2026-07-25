@@ -829,6 +829,52 @@ scenario("the bank is untouchable with the window shut", function()
 end)
 
 ------------------------------------------------------------------
+scenario("a set knows which of its gear you don't have", function()
+    local worn, carried, gone = G(100), G(101), G(105)
+    world.worn[1] = worn
+    putBag(carried)
+    local set = Sets:Create("Raid", { equip = { [1] = worn, [5] = carried, [16] = gone } })
+
+    local missing, count = Sets:MissingSlots(set)
+    check(count == 1, "only the one that's nowhere counts")
+    check(missing[16] == "gone", "and it's marked as gone")
+    check(missing[1] == nil and missing[5] == nil, "worn and carried don't")
+end)
+
+------------------------------------------------------------------
+scenario("gear in the bank is missing, but findably so", function()
+    Fire("BANKFRAME_OPENED")
+    local banked = G(105)
+    world.bags[-1].items[4] = banked
+    local set = Sets:Create("Raid", { equip = { [16] = banked } })
+
+    local missing, count = Sets:MissingSlots(set)
+    check(count == 1, "still counts as not on you")
+    check(missing[16] == "bank", "but says where it is")
+
+    -- With the window shut the client won't say, so it's indistinguishable
+    -- from gear you no longer own.
+    Fire("BANKFRAME_CLOSED")
+    local shut = Sets:MissingSlots(set)
+    check(shut[16] == "gone", "and with the bank closed, it can't say")
+end)
+
+------------------------------------------------------------------
+scenario("a re-enchanted item is not missing, a different suffix is", function()
+    local saved, reEnchanted = G(105, 0), G(105, 2543)
+    putBag(reEnchanted)
+    local set = Sets:Create("Raid", { equip = { [16] = saved } })
+    local _, count = Sets:MissingSlots(set)
+    check(count == 0, "the same item with a different enchant still counts as owned")
+
+    local owl, bear = G(109, 0, 1408, 111), G(109, 0, 1122, 222)
+    putBag(bear)
+    local suffixed = Sets:Create("Suffix", { equip = { [9] = owl } })
+    local _, suffixCount = Sets:MissingSlots(suffixed)
+    check(suffixCount == 1, "a different random suffix is a different item")
+end)
+
+------------------------------------------------------------------
 print("")
 if failures == 0 then
     print(("ALL %d CHECKS PASSED"):format(tests))

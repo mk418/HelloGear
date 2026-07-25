@@ -163,6 +163,18 @@ function Items.MatchScore(wanted, have)
     return 2
 end
 
+-- Two items are interchangeable for a set's purposes when they share an item
+-- ID and a suffix - the same rule MatchScore applies, minus the enchant, which
+-- only ever breaks ties. Reducing to a key makes "do I own one of these?" a
+-- table lookup instead of a scan, which matters when it's asked for every slot
+-- of every set on each refresh.
+function Items.AvailabilityKey(gearID)
+    if gearID == nil or gearID == ns.EMPTY then return nil end
+    local itemID, _, suffix = Items.Parse(gearID)
+    if not itemID then return nil end
+    return itemID .. ":" .. (suffix or 0)
+end
+
 function Items.GetInfo(gearID)
     if gearID == nil or gearID == ns.EMPTY then
         return "(empty)", "Interface\\PaperDoll\\UI-Backpack-EmptySlot", nil, 0

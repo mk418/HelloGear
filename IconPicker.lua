@@ -8,12 +8,14 @@ local COLUMNS, ROWS = 8, 7
 local ICON_SIZE = 30
 local ICON_PAD = 4
 local CELL = ICON_SIZE + ICON_PAD
+local GRID_TOP = 66
 
-local frame, slider, header
+local frame, slider, header, search
 local buttons = {}
-local icons = {}
+local entries = {}      -- everything: { texture = , name = } with name possibly nil
+local shown = {}        -- what the grid is currently showing
 local offset = 0
-local onPick, currentIcon
+local onPick, currentIcon, searchable
 
 --------------------------------------------------------------------------
 -- The icon list
@@ -22,24 +24,35 @@ local onPick, currentIcon
 -- one of the things the set puts on, and hunting for it in a grid of two
 -- thousand is nobody's idea of a good time. The client's macro icon list
 -- follows.
+--
+-- Each entry carries a name to search on where one can be had. Icons arrive
+-- either as texture paths, whose last segment is the name, or as bare file
+-- IDs, which carry no name at all - so whether searching is possible depends
+-- on what this client hands back. The set's own icons always get one: the
+-- item's own name, which is more useful than the texture's anyway.
 --------------------------------------------------------------------------
 
--- Which call exists depends on the client: modern fills a table you pass in,
--- older ones hand back one icon at a time. Neither is guaranteed, and the
--- picker is still useful with just the set's own icons, so a miss isn't fatal.
+local function TextureName(texture)
+    if type(texture) ~= "string" then return nil end
+    local name = texture:match("([^\\/]+)$")
+    return name and name:lower() or nil
+end
+
 local function AppendMacroIcons(list, seen)
+    local function add(icon)
+        if icon and not seen[icon] then
+            seen[icon] = true
+            list[#list + 1] = { texture = icon, name = TextureName(icon) }
+        end
+    end
+
     if type(_G.GetMacroIcons) == "function" then
         local fetched = {}
-        -- Only treat this as the answer if it actually returned something;
-        -- a call that succeeds and fills nothing shouldn't stop us trying the
+        -- Only treat this as the answer if it actually returned something; a
+        -- call that succeeds and fills nothing shouldn't stop us trying the
         -- older API.
         if pcall(_G.GetMacroIcons, fetched) and #fetched > 0 then
-            for _, icon in ipairs(fetched) do
-                if icon and not seen[icon] then
-                    seen[icon] = true
-                    list[#list + 1] = icon
-                end
-            end
+            for _, icon in ipairs(fetched) do add(icon) end
             return
         end
     end
@@ -48,55 +61,58 @@ local function AppendMacroIcons(list, seen)
         local ok, count = pcall(_G.GetNumMacroIcons)
         if not ok or not count then return end
         for index = 1, count do
-            local _, icon = pcall(_G.GetMacroIconInfo, index)
-            if icon and not seen[icon] then
-                seen[icon] = true
-                list[#list + 1] = icon
-            end
+            local fine, icon = pcall(_G.GetMacroIconInfo, index)
+            if fine then add(icon) end
         end
     end
 end
 
-local function BuildIconList(set)
+local function BuildEntries(set)
     local list, seen = {}, {}
 
     for _, def in ipairs(ns.SLOTS) do
         local gearID = set.equip[def.id]
         if gearID and gearID ~= ns.EMPTY then
-            local _, texture = Items.GetInfo(gearID)
+            local itemName, texture = Items.GetInfo(gearID)
             if texture and not seen[texture] then
                 seen[texture] = true
-                list[#list + 1] = texture
+                list[#list + 1] = {
+                    texture = texture,
+                    name = itemName and itemName:lower() or TextureName(texture),
+                }
             end
         end
     end
-    local setIcons = #list
-
     AppendMacroIcons(list, seen)
-    return list, setIcons
+
+    local named = 0
+    for _, entry in ipairs(list) do
+        if entry.name then named = named + 1 end
+    end
+    return list, named
 end
 
 --------------------------------------------------------------------------
 
 local function MaxOffset()
-    local rows = math.ceil(#icons / COLUMNS)
-    return math.max(0, rows - ROWS)
+    return math.max(0, math.ceil(#shown / COLUMNS) - ROWS)
 end
 
 local function Render()
     for index, button in ipairs(buttons) do
-        local iconIndex = offset * COLUMNS + index
-        local texture = icons[iconIndex]
-        if texture then
-            button.icon:SetTexture(texture)
-            button.texture = texture
-            button.selected:SetShown(texture == currentIcon)
+        local entry = shown[offset * COLUMNS + index]
+        if entry then
+            button.icon:SetTexture(entry.texture)
+            button.entry = entry
+            button.selected:SetShown(entry.texture == currentIcon)
             button:Show()
         else
             button:Hide()
         end
     end
-    if slider then slider:SetValue(offset) end
+    slider:SetMinMaxValues(0, MaxOffset())
+    slider:SetShown(MaxOffset() > 0)
+    slider:SetValue(offset)
 end
 
 local function SetOffset(value)
@@ -104,12 +120,31 @@ local function SetOffset(value)
     Render()
 end
 
+local function Filter(text)
+    text = (text or ""):lower():gsub("^%s+", ""):gsub("%s+$", "")
+    shown = {}
+    if text == "" then
+        for _, entry in ipairs(entries) do shown[#shown + 1] = entry end
+    else
+        for _, entry in ipairs(entries) do
+            if entry.name and entry.name:find(text, 1, true) then
+                shown[#shown + 1] = entry
+            end
+        end
+    end
+    offset = 0
+    Render()
+    return #shown
+end
+
+--------------------------------------------------------------------------
+
 local function CreateButton(index)
     local button = CreateFrame("Button", nil, frame)
     button:SetSize(ICON_SIZE, ICON_SIZE)
     local col = (index - 1) % COLUMNS
     local row = math.floor((index - 1) / COLUMNS)
-    button:SetPoint("TOPLEFT", 16 + col * CELL, -(36 + row * CELL))
+    button:SetPoint("TOPLEFT", 16 + col * CELL, -(GRID_TOP + row * CELL))
 
     button.icon = button:CreateTexture(nil, "ARTWORK")
     button.icon:SetAllPoints()
@@ -126,9 +161,16 @@ local function CreateButton(index)
     button.highlight:SetAllPoints()
     button.highlight:SetColorTexture(1, 1, 1, 0.25)
 
+    button:SetScript("OnEnter", function(self)
+        if not (self.entry and self.entry.name) then return end
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:AddLine(self.entry.name, 1, 1, 1)
+        GameTooltip:Show()
+    end)
+    button:SetScript("OnLeave", GameTooltip_Hide)
     button:SetScript("OnClick", function(self)
-        if not self.texture then return end
-        if onPick then onPick(self.texture) end
+        if not self.entry then return end
+        if onPick then onPick(self.entry.texture) end
         IconPicker:Close()
     end)
 
@@ -138,27 +180,44 @@ end
 
 local function Build()
     frame = ns.CreatePanel("HelloGearIconPicker")
-    frame:SetSize(16 * 2 + COLUMNS * CELL + 20, 36 + ROWS * CELL + 40)
+    frame:SetSize(16 * 2 + COLUMNS * CELL + 20, GRID_TOP + ROWS * CELL + 40)
     frame:SetClampedToScreen(true)
-    -- Above the options popout it opens from, which sits at 30.
+    -- Above the options popout it opens beside, which sits at 30.
     frame:SetFrameLevel(40)
     frame:EnableMouseWheel(true)
-    frame:SetScript("OnMouseWheel", function(_, delta)
-        SetOffset(offset - delta)
-    end)
+    frame:SetScript("OnMouseWheel", function(_, delta) SetOffset(offset - delta) end)
 
     header = frame:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
     header:SetPoint("TOPLEFT", 18, -16)
+
+    search = CreateFrame("EditBox", "HelloGearIconSearch", frame, "InputBoxTemplate")
+    search:SetPoint("TOPLEFT", 22, -36)
+    search:SetSize(COLUMNS * CELL - 30, 20)
+    search:SetAutoFocus(false)
+    search:SetMaxLetters(40)
+    search:SetScript("OnTextChanged", function(self)
+        local count = Filter(self:GetText())
+        if self:GetText() ~= "" and count == 0 then
+            header:SetText("|cffffd200Choose an icon|r  |cffff8080nothing matches|r")
+        else
+            IconPicker:UpdateHeader()
+        end
+    end)
+    search:SetScript("OnEscapePressed", function(self)
+        self:SetText("")
+        self:ClearFocus()
+    end)
 
     for index = 1, COLUMNS * ROWS do CreateButton(index) end
 
     slider = CreateFrame("Slider", nil, frame)
     slider:SetOrientation("VERTICAL")
     slider:SetWidth(12)
-    slider:SetPoint("TOPRIGHT", -14, -38)
+    slider:SetPoint("TOPRIGHT", -14, -(GRID_TOP + 2))
     slider:SetPoint("BOTTOMRIGHT", -14, 46)
     slider:SetThumbTexture("Interface\\Buttons\\UI-ScrollBar-Knob")
     slider:GetThumbTexture():SetSize(12, 24)
+    slider:SetValueStep(1)
     slider:SetScript("OnValueChanged", function(_, value)
         if math.floor(value + 0.5) ~= offset then SetOffset(value) end
     end)
@@ -168,21 +227,6 @@ local function Build()
     cancel:SetPoint("BOTTOMRIGHT", -16, 14)
     cancel:SetText(CANCEL or "Cancel")
     cancel:SetScript("OnClick", function() IconPicker:Close() end)
-
-    local suggest = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    suggest:SetSize(130, 22)
-    suggest:SetPoint("BOTTOMLEFT", 16, 14)
-    suggest:SetText("Use a set item")
-    suggest:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:AddLine("Pick an icon from the set's own gear, as a new set does", 1, 1, 1, true)
-        GameTooltip:Show()
-    end)
-    suggest:SetScript("OnLeave", GameTooltip_Hide)
-    suggest:SetScript("OnClick", function()
-        if onPick and IconPicker.set then onPick(ns.Sets:SuggestIcon(IconPicker.set)) end
-        IconPicker:Close()
-    end)
 
     -- Same click-away dismissal the other popups use.
     frame:SetScript("OnShow", function()
@@ -202,6 +246,11 @@ local function Build()
     end)
 end
 
+function IconPicker:UpdateHeader()
+    header:SetText(("|cffffd200Choose an icon|r  |cff808080%d shown of %d|r")
+        :format(#shown, #entries))
+end
+
 function IconPicker:Open(set, anchor, callback)
     if not frame then Build() end
 
@@ -209,25 +258,42 @@ function IconPicker:Open(set, anchor, callback)
     onPick = callback
     currentIcon = set.icon
 
-    local setIcons
-    icons, setIcons = BuildIconList(set)
-    header:SetText(("|cffffd200Choose an icon|r  |cff808080%d from this set, %d in all|r")
-        :format(setIcons, #icons))
+    local named
+    entries, named = BuildEntries(set)
+    searchable = named > 0
 
-    slider:SetMinMaxValues(0, MaxOffset())
-    slider:SetValueStep(1)
-    slider:SetShown(MaxOffset() > 0)
+    search:SetText("")
+    search:SetEnabled(searchable)
+    if searchable then
+        search:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:AddLine("Search icon names", 1, 1, 1)
+            GameTooltip:AddLine(("%d of %d icons have a name to search"):format(named, #entries),
+                0.7, 0.7, 0.7)
+            GameTooltip:Show()
+        end)
+    else
+        -- The client handed back bare file IDs, which carry no name. Nothing
+        -- to search, so say so rather than leaving a box that does nothing.
+        search:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:AddLine("This client's icons have no names to search", 1, 0.5, 0.5, true)
+            GameTooltip:Show()
+        end)
+    end
+    search:SetScript("OnLeave", GameTooltip_Hide)
+
+    Filter("")
+    self:UpdateHeader()
 
     -- Open on the row holding the set's current icon, so the picker starts
     -- where the answer probably is rather than at the top of two thousand.
-    offset = 0
-    for index, texture in ipairs(icons) do
-        if texture == currentIcon then
-            offset = math.min(MaxOffset(), math.floor((index - 1) / COLUMNS))
+    for index, entry in ipairs(shown) do
+        if entry.texture == currentIcon then
+            SetOffset(math.floor((index - 1) / COLUMNS))
             break
         end
     end
-    Render()
 
     frame:ClearAllPoints()
     if anchor then

@@ -171,10 +171,12 @@ local function BuildOptions()
     options.chooseIcon:SetSize(206, 22)
     options.chooseIcon:SetPoint("TOPLEFT", options.hidden, "BOTTOMLEFT", 2, -4)
     options.chooseIcon:SetText("Choose icon...")
-    options.chooseIcon:SetScript("OnClick", function(self)
+    options.chooseIcon:SetScript("OnClick", function()
         local set = options.setName and Sets:Get(options.setName)
         if not set then return end
-        ns.IconPicker:Open(set, self, function(texture)
+        -- Beside the options panel rather than the button, so it doesn't sit
+        -- on top of the thing that opened it.
+        ns.IconPicker:Open(set, options, function(texture)
             set.icon = texture
             ns.Menu:Refresh()
             Panel:Refresh()
@@ -225,14 +227,21 @@ end
 -- Set rows
 --------------------------------------------------------------------------
 
-local function RowTooltip(self)
-    local set = Sets:Get(self.setName)
+-- Shared by both set lists: the whole set, slot by slot, with anything you
+-- can't currently put on called out.
+function ns.SetTooltip(owner, setName, anchor)
+    local set = Sets:Get(setName)
     if not set then return end
 
-    GameTooltip:SetOwner(self, "ANCHOR_LEFT")
-    GameTooltip:AddLine(self.setName, 1, 1, 1)
-    if Sets:IsEquipped(self.setName) then
+    local missing, missingCount = Sets:MissingSlots(set)
+
+    GameTooltip:SetOwner(owner, anchor or "ANCHOR_LEFT")
+    GameTooltip:AddLine(setName, 1, 1, 1)
+    if Sets:IsEquipped(setName) then
         GameTooltip:AddLine("Equipped", 0.5, 1, 0.5)
+    end
+    if missingCount > 0 then
+        GameTooltip:AddLine(("%d item(s) you don't have on you"):format(missingCount), 1, 0.25, 0.25)
     end
     GameTooltip:AddLine(" ")
 
@@ -244,14 +253,25 @@ local function RowTooltip(self)
                 right = "|cff808080(empty)|r"
             else
                 local itemName, _, _, quality = Items.GetInfo(gearID)
-                local color = quality and ITEM_QUALITY_COLORS[quality]
-                right = (color and color.hex or "|cffffffff") .. (itemName or "...") .. "|r"
+                local where = missing[def.id]
+                if where then
+                    -- Red for both, because either way it isn't going on right
+                    -- now; the suffix says whether it's findable.
+                    right = "|cffff4040" .. (itemName or "...") .. "|r"
+                        .. (where == "bank" and " |cffffd200(bank)|r" or " |cffff4040(missing)|r")
+                else
+                    local color = quality and ITEM_QUALITY_COLORS[quality]
+                    right = (color and color.hex or "|cffffffff") .. (itemName or "...") .. "|r"
+                end
             end
             GameTooltip:AddDoubleLine("|cffb0b0b0" .. def.label .. "|r", right)
         end
     end
-
     GameTooltip:AddLine(" ")
+end
+
+local function RowTooltip(self)
+    ns.SetTooltip(self, self.setName)
     GameTooltip:AddLine("Click to select, double-click to equip", 0.6, 0.6, 0.6)
     GameTooltip:Show()
 end
@@ -866,12 +886,25 @@ function Panel:Refresh()
     if not panel:IsShown() then return end
 
     local names = Sets:Names(true)
+    -- One inventory scan for the whole list rather than one per set.
+    local index = Sets:InventoryIndex()
     for i, name in ipairs(names) do
         local row = rows[i] or CreateRow(i)
         local set = Sets:Get(name)
         row.setName = name
         row.icon:SetTexture(Sets:GetIcon(set))
-        local color = Sets:IsEquipped(name) and "|cff80ff80" or (set.hidden and "|cff909090" or "|cffffffff")
+
+        local _, missingCount = Sets:MissingSlots(set, index)
+        local color
+        if Sets:IsEquipped(name) then
+            color = "|cff80ff80"
+        elseif missingCount > 0 then
+            color = "|cffff4040"
+        elseif set.hidden then
+            color = "|cff909090"
+        else
+            color = "|cffffffff"
+        end
         row.label:SetText(color .. name .. "|r")
         row.selectedBar:SetShown(name == selected)
         row.stripe:SetShown(i % 2 == 0)
