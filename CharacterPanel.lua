@@ -20,6 +20,7 @@ local CONTENT_RIGHT = -34  -- border, plus room for the scrollbar inside it
 local PANEL_GAP = 1
 local ROW_WIDTH = PANEL_WIDTH + CONTENT_RIGHT - CONTENT_LEFT
 local BUTTON_SIZE = 26
+local BUTTON_HALF = math.floor((PANEL_WIDTH - 34 - 16 - 4) / 2)  -- two per row
 
 
 local panel, toggle, scroll, content, scrollBar, statusText, editButton, equipButton, saveButton
@@ -662,7 +663,7 @@ local function BuildPanel()
     title:SetText("Gear Sets")
 
     equipButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-    equipButton:SetSize(83, 22)
+    equipButton:SetSize(BUTTON_HALF, 22)
     equipButton:SetPoint("TOPLEFT", CONTENT_LEFT, -40)
     equipButton:SetText(EQUIPSET_EQUIP or "Equip")
     equipButton:SetScript("OnClick", function()
@@ -676,8 +677,8 @@ local function BuildPanel()
     equipButton:SetScript("OnLeave", GameTooltip_Hide)
 
     saveButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-    saveButton:SetSize(83, 22)
-    saveButton:SetPoint("LEFT", equipButton, "RIGHT", 4, 0)
+    saveButton:SetSize(BUTTON_HALF, 22)
+    saveButton:SetPoint("TOPLEFT", equipButton, "BOTTOMLEFT", 0, -4)
     saveButton:SetText(SAVE or "Save")
     saveButton:SetScript("OnClick", function()
         if not selected then return end
@@ -699,15 +700,15 @@ local function BuildPanel()
     saveButton:SetScript("OnLeave", GameTooltip_Hide)
 
     bankGetButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-    bankGetButton:SetSize(83, 22)
-    bankGetButton:SetPoint("TOPLEFT", equipButton, "BOTTOMLEFT", 0, -4)
+    bankGetButton:SetSize(BUTTON_HALF, 22)
+    bankGetButton:SetPoint("TOPLEFT", saveButton, "BOTTOMLEFT", 0, -4)
     bankGetButton:SetText("From bank")
     bankGetButton:SetScript("OnClick", function()
         if selected then ns.Bank:Withdraw(selected) end
     end)
 
     bankPutButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-    bankPutButton:SetSize(83, 22)
+    bankPutButton:SetSize(BUTTON_HALF, 22)
     bankPutButton:SetPoint("LEFT", bankGetButton, "RIGHT", 4, 0)
     bankPutButton:SetText("To bank")
     bankPutButton:SetScript("OnClick", function()
@@ -733,8 +734,8 @@ local function BuildPanel()
     bankPutButton:SetScript("OnLeave", GameTooltip_Hide)
 
     scroll = CreateFrame("ScrollFrame", "HelloGearCharacterPanelScroll", panel, "UIPanelScrollFrameTemplate")
-    scroll:SetPoint("TOPLEFT", CONTENT_LEFT, -94)
-    scroll:SetPoint("BOTTOMRIGHT", CONTENT_RIGHT, 90)
+    scroll:SetPoint("TOPLEFT", CONTENT_LEFT, -120)
+    scroll:SetPoint("BOTTOMRIGHT", CONTENT_RIGHT, 66)
 
     content = CreateFrame("Frame", nil, scroll)
     content:SetSize(ROW_WIDTH, 1)
@@ -743,7 +744,7 @@ local function BuildPanel()
 
     editButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
     editButton:SetSize(ROW_WIDTH, 22)
-    editButton:SetPoint("BOTTOMLEFT", CONTENT_LEFT, 62)
+    editButton:SetPoint("BOTTOMLEFT", CONTENT_LEFT, 38)
     editButton:SetScript("OnClick", function()
         Panel:SetEditing(not ns.Paperdoll:IsEditing())
     end)
@@ -758,8 +759,8 @@ local function BuildPanel()
     editButton:SetScript("OnLeave", GameTooltip_Hide)
 
     local newButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-    newButton:SetSize(math.floor((ROW_WIDTH - 4) / 2), 22)
-    newButton:SetPoint("BOTTOMLEFT", CONTENT_LEFT, 38)
+    newButton:SetSize(BUTTON_HALF, 22)
+    newButton:SetPoint("LEFT", saveButton, "RIGHT", 4, 0)
     newButton:SetText("New set")
     newButton:SetScript("OnClick", function() StaticPopup_Show("HELLOGEAR_NEW_SET") end)
     newButton:SetScript("OnEnter", function(self)
@@ -769,9 +770,11 @@ local function BuildPanel()
     end)
     newButton:SetScript("OnLeave", GameTooltip_Hide)
 
+    -- Beside Equip: both act on the character right now, where the row below
+    -- acts on the set and the one below that on the bank.
     local undressButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-    undressButton:SetSize(math.floor((ROW_WIDTH - 4) / 2), 22)
-    undressButton:SetPoint("LEFT", newButton, "RIGHT", 4, 0)
+    undressButton:SetSize(BUTTON_HALF, 22)
+    undressButton:SetPoint("LEFT", equipButton, "RIGHT", 4, 0)
     undressButton:SetText("Undress")
     undressButton:SetScript("OnClick", function() ns.Equip:Undress() end)
     undressButton:SetScript("OnEnter", function(self)
