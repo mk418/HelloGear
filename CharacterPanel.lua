@@ -424,157 +424,55 @@ local CLOSE_TO_EDGE = -8
 -- All measured off screenshot pixels rather than estimated: the artwork's
 -- visible edges sit inside its 384x512 layout, with transparent padding on
 -- every side, and every one of these was originally guessed wrong.
-local ART_VISIBLE_RIGHT = 348   -- where the frame's right border ends
-local ART_TOP_PADDING = 5       -- transparent rows above the top border
-local ART_BORDER = 11           -- how thick that border is
+local ART_TOP_PADDING = 5       -- transparent rows above the artwork's top
 
--- Stretches of border known to be free of decoration. Whole quadrants can't be
--- used directly: they carry the paperdoll's slot recesses, and the bottom
--- border carries the hardware the character tabs bolt onto, which ends up
--- orphaned in the middle of a panel that has no tabs. So each edge is built
--- from a clean strip instead, and the bottom reuses the top border flipped -
--- the top is the one horizontal edge with nothing attached to it.
-local CLEAN_TOP_X1, CLEAN_TOP_X2 = 120, 240   -- plain run of the top border
--- Depth matters as much as the x range: at depth 60 the right border is flat
--- and dark, while from ~120 down it carries the bevel that ends in the bright
--- outer line. Sampling the former is why the panel had a dull dark band for an
--- edge. Verified the same at depths 125, 245 and 365.
-local CLEAN_RIGHT_Y1, CLEAN_RIGHT_Y2 = 250, 252
+-- Both the character frame and the social window edge themselves the same
+-- way: a bright highlight on the very outside, a dark line immediately
+-- inside it, then a mid tone that is - measured - the same colour as the
+-- header band the panel is filled with.
+--
+-- Drawn rather than sliced out of the frame's artwork. Slicing kept sampling
+-- the wrong part of the texture, and the profile is three flat colours; the
+-- reproduction is exact and there is nothing left to drift. Measured off
+-- screenshots at RGB 141 and 20 against the fill's 59, then corrected for the
+-- client rendering a colour texture lighter than its nominal value.
+local EDGE_LIGHT = { 0.487, 0.482, 0.463 }
+local EDGE_DARK  = { 0.047, 0.047, 0.043 }
 
--- Read at runtime rather than hardcoding file IDs, so a client that ships
--- different artwork still gets its own.
-local function FrameArtPieces()
-    if not PaperDollFrame then return nil end
-    local pieces = {}
-    for _, region in ipairs({ PaperDollFrame:GetRegions() }) do
-        if region.GetTexture and region:GetDrawLayer() == "BORDER" then
-            local file = region:GetTexture()
-            local point, _, relPoint, ox, oy = region:GetPoint(1)
-            if file and point == "TOPLEFT" and relPoint == "TOPLEFT" then
-                -- The region may already be showing only part of its file:
-                -- Blizzard's right-hand quadrants are 128 wide drawn from a
-                -- 256-wide texture. Slicing has to happen inside whatever
-                -- rectangle it's already using, not in whole-file coordinates,
-                -- or SetTexCoord throws that mapping away and samples the
-                -- wrong half. This is why drawing the quadrants whole looked
-                -- right and every sliced version didn't.
-                local ulx, uly, _, lly, urx = region:GetTexCoord()
-                pieces[#pieces + 1] = {
-                    file = file,
-                    width = region:GetWidth(),
-                    height = region:GetHeight(),
-                    x = ox or 0,
-                    y = oy or 0,
-                    u0 = ulx or 0, u1 = urx or 1,
-                    v0 = uly or 0, v1 = lly or 1,
-                }
-            end
-        end
-    end
-    return #pieces > 0 and pieces or nil
-end
-
--- The four quadrants keyed by which corner they are, identified by their own
--- offsets rather than by order or file ID.
-local function ArtQuadrants()
-    local pieces = FrameArtPieces()
-    if not pieces then return nil end
-    local quads = {}
-    for _, piece in ipairs(pieces) do
-        local key = (piece.y == 0 and "top" or "bottom") .. (piece.x == 0 and "Left" or "Right")
-        quads[key] = piece
-    end
-    return (quads.topLeft and quads.topRight) and quads or nil
-end
-
--- Frame coordinates -> texture coordinates within one quadrant. `depth` is
--- measured downward from the artwork's top, the way the layout offsets are.
-function Panel.TexCoords(quad, x1, x2, depth1, depth2)
-    local quadTop = -quad.y
-    local fx1 = (x1 - quad.x) / quad.width
-    local fx2 = (x2 - quad.x) / quad.width
-    local fy1 = (depth1 - quadTop) / quad.height
-    local fy2 = (depth2 - quadTop) / quad.height
-
-    -- Map the fraction of the region onto the slice of the file the region is
-    -- actually showing.
-    local u0, u1 = quad.u0 or 0, quad.u1 or 1
-    local v0, v1 = quad.v0 or 0, quad.v1 or 1
-    return u0 + fx1 * (u1 - u0), u0 + fx2 * (u1 - u0),
-           v0 + fy1 * (v1 - v0), v0 + fy2 * (v1 - v0)
-end
-local TexCoords = Panel.TexCoords
-
-local function Slice(parent, quad, x1, x2, depth1, depth2, flipVertically)
-    local texture = parent:CreateTexture(nil, "BORDER")
-    texture:SetTexture(quad.file)
-    local left, right, top, bottom = TexCoords(quad, x1, x2, depth1, depth2)
-    if flipVertically then top, bottom = bottom, top end
-    texture:SetTexCoord(left, right, top, bottom)
-    return texture
-end
-
--- Builds the panel's chrome out of clean strips of the character frame's own
--- artwork. Every piece is anchored to the panel's own edges, so unlike the
--- whole-quadrant approach this doesn't depend on the panel and the artwork
--- agreeing about where the frame's corner is.
 local function BuildChrome(target)
-    local quads = ArtQuadrants()
-    if not quads then
-        ns.ApplyChrome(target)
-        return false
-    end
-
-    -- Textures can't be destroyed, so a rebuild hides the old set and makes a
-    -- new one. Only ever a handful, and only when /hg dock border is used.
     if target.chrome then
         for _, texture in ipairs(target.chrome) do texture:Hide() end
     end
     target.chrome = {}
-    local function keep(texture)
+
+    local function Line(colour)
+        local texture = target:CreateTexture(nil, "BORDER")
+        texture:SetColorTexture(colour[1], colour[2], colour[3], 1)
         target.chrome[#target.chrome + 1] = texture
         return texture
     end
 
-    local B = ns.Config:Get("artBorder") or ART_BORDER
-    local R = ART_VISIBLE_RIGHT
-
-    local top = keep(Slice(target, quads.topLeft, CLEAN_TOP_X1, CLEAN_TOP_X2, ART_TOP_PADDING, ART_TOP_PADDING + B))
-    top:SetPoint("TOPLEFT")
-    top:SetPoint("BOTTOMRIGHT", target, "TOPRIGHT", -B, -B)
-
-    local bottom = keep(Slice(target, quads.topLeft, CLEAN_TOP_X1, CLEAN_TOP_X2, ART_TOP_PADDING, ART_TOP_PADDING + B, true))
-    bottom:SetPoint("BOTTOMLEFT")
-    bottom:SetPoint("TOPRIGHT", target, "BOTTOMRIGHT", -B, B)
-
-    -- Both anchors are on the same edge, so they fix the height but say
-    -- nothing about the width; without SetWidth the texture falls back to its
-    -- natural 128px and smears a stretched border across the panel.
-    local right = keep(Slice(target, quads.topRight, R - B, R, CLEAN_RIGHT_Y1, CLEAN_RIGHT_Y2))
-    right:SetWidth(B)
-    right:SetPoint("TOPRIGHT", target, "TOPRIGHT", 0, -B)
-    right:SetPoint("BOTTOMRIGHT", target, "BOTTOMRIGHT", 0, B)
-
-    local topCorner = keep(Slice(target, quads.topRight, R - B, R, ART_TOP_PADDING, ART_TOP_PADDING + B))
-    topCorner:SetSize(B, B)
-    topCorner:SetPoint("TOPRIGHT")
-
-    -- The real bottom-right corner sits next to the tab hardware, so the top
-    -- corner is mirrored down instead.
-    local bottomCorner = keep(Slice(target, quads.topRight, R - B, R, ART_TOP_PADDING, ART_TOP_PADDING + B, true))
-    bottomCorner:SetSize(B, B)
-    bottomCorner:SetPoint("BOTTOMRIGHT")
-
-    -- The character frame's header band - the strip carrying the level and
-    -- class - measured off a screenshot at RGB 58,53,49.
-    --
-    -- The input is lower than that fraction: feeding 0.227 came back as 71 on
-    -- screen, so these are scaled to land on the header's rendered value
-    -- rather than its nominal one.
-    local fill = keep(target:CreateTexture(nil, "BACKGROUND"))
-    fill:SetPoint("TOPLEFT", 0, -B)
-    fill:SetPoint("BOTTOMRIGHT", -B, B)
+    local fill = target:CreateTexture(nil, "BACKGROUND")
+    fill:SetAllPoints(target)
     fill:SetColorTexture(0.178, 0.163, 0.151, 1)
+    target.chrome[#target.chrome + 1] = fill
+
+    -- No left edge: that side is the character frame's own border, which the
+    -- panel is tucked behind.
+    local edges = {
+        { EDGE_LIGHT, "TOPLEFT", 0, 0, "TOPRIGHT", 0, 0, "height" },
+        { EDGE_DARK, "TOPLEFT", 0, -1, "TOPRIGHT", 0, -1, "height" },
+        { EDGE_LIGHT, "BOTTOMLEFT", 0, 0, "BOTTOMRIGHT", 0, 0, "height" },
+        { EDGE_DARK, "BOTTOMLEFT", 0, 1, "BOTTOMRIGHT", 0, 1, "height" },
+        { EDGE_LIGHT, "TOPRIGHT", 0, 0, "BOTTOMRIGHT", 0, 0, "width" },
+        { EDGE_DARK, "TOPRIGHT", -1, 0, "BOTTOMRIGHT", -1, 0, "width" },
+    }
+    for _, edge in ipairs(edges) do
+        local line = Line(edge[1])
+        line:SetPoint(edge[2], target, edge[2], edge[3], edge[4])
+        line:SetPoint(edge[5], target, edge[5], edge[6], edge[7])
+        if edge[8] == "height" then line:SetHeight(1) else line:SetWidth(1) end
+    end
 
     return true
 end
@@ -733,12 +631,6 @@ function Panel:ReportChrome()
             index, texture:IsShown() and "shown" or "|cffff8080hidden|r",
             tostring(texture:GetTexture()), l or -1, r or -1, t or -1, b or -1)
     end
-end
-
-function Panel:SetBorderWidth(pixels)
-    ns.Config:Set("artBorder", pixels ~= ART_BORDER and pixels or nil)
-    BuildChrome(panel)
-    ns:Print("border width set to %d (default %d)", pixels, ART_BORDER)
 end
 
 function Panel:SetDockNudge(pixels)

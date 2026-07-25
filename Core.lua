@@ -226,13 +226,10 @@ SlashCmdList["HELLOGEAR"] = function(msg)
         end
     elseif cmd == "dock" then
         local pixels = tonumber(rest)
-        local border = rest:match("^border%s+(%-?%d+)$")
         if rest:lower() == "art" then
             ns.Panel:ReportArtwork()
         elseif rest:lower() == "chrome" then
             ns.Panel:ReportChrome()
-        elseif border then
-            ns.Panel:SetBorderWidth(tonumber(border))
         elseif pixels then
             ns.Panel:SetDockNudge(pixels)
         else
