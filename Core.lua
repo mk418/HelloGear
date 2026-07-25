@@ -207,6 +207,8 @@ SlashCmdList["HELLOGEAR"] = function(msg)
         else
             ns.Panel:ReportGeometry()
         end
+    elseif cmd == "dumpicons" then
+        ns.IconPicker:Dump()
     elseif cmd == "config" then
         ns.Config:OpenPanel()
     elseif cmd == "reset" then

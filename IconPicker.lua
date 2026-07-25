@@ -43,32 +43,38 @@ end
 -- segment is a name, while the table-filling one yields bare file IDs, which
 -- carry nothing to match against. So the indexed call is tried first, and only
 -- kept if it really does hand back strings.
-local function AppendMacroIcons(list, seen)
-    local function add(icon)
-        if icon and not seen[icon] then
-            seen[icon] = true
-            list[#list + 1] = { texture = icon, name = TextureName(icon) }
-        end
-    end
-
+-- Whatever this client will hand over, in whatever form it hands it over.
+local function MacroIconList()
     if type(_G.GetNumMacroIcons) == "function" and type(_G.GetMacroIconInfo) == "function" then
         local ok, count = pcall(_G.GetNumMacroIcons)
         if ok and count and count > 0 then
             local fine, first = pcall(_G.GetMacroIconInfo, 1)
             if fine and type(first) == "string" then
+                local out = {}
                 for index = 1, count do
                     local got, icon = pcall(_G.GetMacroIconInfo, index)
-                    if got then add(icon) end
+                    if got and icon then out[#out + 1] = icon end
                 end
-                return
+                return out
             end
         end
     end
 
     if type(_G.GetMacroIcons) == "function" then
         local fetched = {}
-        if pcall(_G.GetMacroIcons, fetched) and #fetched > 0 then
-            for _, icon in ipairs(fetched) do add(icon) end
+        if pcall(_G.GetMacroIcons, fetched) and #fetched > 0 then return fetched end
+    end
+    return {}
+end
+
+local function AppendMacroIcons(list, seen)
+    for _, icon in ipairs(MacroIconList()) do
+        if not seen[icon] then
+            seen[icon] = true
+            -- ns.IconNames is the generated file-ID lookup, shipped only if
+            -- this client needs it; without it a bare ID has no name.
+            local name = TextureName(icon) or (ns.IconNames and ns.IconNames[icon])
+            list[#list + 1] = { texture = icon, name = name }
         end
     end
 end
@@ -378,6 +384,21 @@ function IconPicker:Open(set, anchor, callback)
         frame:SetPoint("CENTER")
     end
     frame:Show()
+end
+
+-- Writes the raw icon list to saved variables so it can be turned into a name
+-- table offline. Only needed once, and again if a patch adds icons.
+function IconPicker:Dump()
+    local list = MacroIconList()
+    if #list == 0 then
+        ns:Print("this client returned no icon list to dump")
+        return
+    end
+
+    HelloGearDB.iconDump = list
+    local sample = type(list[1]) == "string" and "paths" or "file IDs"
+    ns:Print("dumped |cff80ff80%d|r icon %s", #list, sample)
+    ns:Print("now |cffffff00/reload|r so it's written to disk")
 end
 
 function IconPicker:Close()
