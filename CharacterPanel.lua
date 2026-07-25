@@ -542,10 +542,13 @@ local function BuildChrome(target)
     bottomCorner:SetSize(B, B)
     bottomCorner:SetPoint("BOTTOMRIGHT")
 
+    -- The character frame's header band - the strip carrying the level and
+    -- class - sampled off a screenshot at RGB 58,53,49. Warmer and a good deal
+    -- lighter than the near-black this started as.
     local fill = keep(target:CreateTexture(nil, "BACKGROUND"))
     fill:SetPoint("TOPLEFT", 0, -B)
     fill:SetPoint("BOTTOMRIGHT", -B, B)
-    fill:SetColorTexture(0.10, 0.09, 0.08, 1)
+    fill:SetColorTexture(0.227, 0.208, 0.192, 1)
 
     return true
 end
@@ -682,6 +685,25 @@ function Panel:ReportArtwork()
             end
             if shown == 0 then ns:Print("  (none)") end
         end
+    end
+end
+
+-- Whether the sliced border actually made it onto the screen, and where. The
+-- pieces have been silently absent more than once, and "no border visible" and
+-- "border drawn somewhere unhelpful" look identical from a screenshot.
+function Panel:ReportChrome()
+    if not panel.chrome then
+        ns:Print("|cffff8080no sliced chrome|r - the generic fallback is in use")
+        return
+    end
+    ns:Print("panel: left %.1f right %.1f top %.1f bottom %.1f",
+        panel:GetLeft() or -1, panel:GetRight() or -1,
+        panel:GetTop() or -1, panel:GetBottom() or -1)
+    for index, texture in ipairs(panel.chrome) do
+        local l, r, t, b = texture:GetLeft(), texture:GetRight(), texture:GetTop(), texture:GetBottom()
+        ns:Print("  %d: %s  %s  l%.0f r%.0f t%.0f b%.0f",
+            index, texture:IsShown() and "shown" or "|cffff8080hidden|r",
+            tostring(texture:GetTexture()), l or -1, r or -1, t or -1, b or -1)
     end
 end
 

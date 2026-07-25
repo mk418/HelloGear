@@ -5,6 +5,8 @@
 ## Version: 0.1.0
 ## SavedVariables: HelloGearDB
 ## SavedVariablesPerCharacter: HelloGearCharDB
+## IconTexture: Interface\AddOns\HelloGear\Icon.png
+## Category: Bags & Inventory
 ## X-License: MIT
 
 Core.lua
