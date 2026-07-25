@@ -116,9 +116,10 @@ end
 check(coords(TexCoords(topLeft, 120, 240, 5, 16)),
     coords(120/256, 240/256, 5/256, 16/256), "top border strip")
 
--- The right border, 11px wide, ending at the artwork's visible edge of 348.
-check(coords(TexCoords(topRight, 337, 348, 60, 62)),
-    coords((337-256)/128, (348-256)/128, 60/256, 62/256), "right border strip")
+-- The right border, 11px wide, ending at the artwork's visible edge of 348,
+-- sampled at a depth where it actually carries its bevel.
+check(coords(TexCoords(topRight, 337, 348, 250, 252)),
+    coords((337-256)/128, (348-256)/128, 250/256, 252/256), "right border strip")
 
 -- Every coordinate has to land inside the texture, or the slice samples
 -- neighbouring artwork - which is how the paperdoll's slot recesses got in.

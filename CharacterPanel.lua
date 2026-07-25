@@ -435,7 +435,11 @@ local ART_BORDER = 11           -- how thick that border is
 -- from a clean strip instead, and the bottom reuses the top border flipped -
 -- the top is the one horizontal edge with nothing attached to it.
 local CLEAN_TOP_X1, CLEAN_TOP_X2 = 120, 240   -- plain run of the top border
-local CLEAN_RIGHT_Y1, CLEAN_RIGHT_Y2 = 60, 62 -- plain run of the right border
+-- Depth matters as much as the x range: at depth 60 the right border is flat
+-- and dark, while from ~120 down it carries the bevel that ends in the bright
+-- outer line. Sampling the former is why the panel had a dull dark band for an
+-- edge. Verified the same at depths 125, 245 and 365.
+local CLEAN_RIGHT_Y1, CLEAN_RIGHT_Y2 = 250, 252
 
 -- Read at runtime rather than hardcoding file IDs, so a client that ships
 -- different artwork still gets its own.
@@ -543,12 +547,15 @@ local function BuildChrome(target)
     bottomCorner:SetPoint("BOTTOMRIGHT")
 
     -- The character frame's header band - the strip carrying the level and
-    -- class - sampled off a screenshot at RGB 58,53,49. Warmer and a good deal
-    -- lighter than the near-black this started as.
+    -- class - measured off a screenshot at RGB 58,53,49.
+    --
+    -- The input is lower than that fraction: feeding 0.227 came back as 71 on
+    -- screen, so these are scaled to land on the header's rendered value
+    -- rather than its nominal one.
     local fill = keep(target:CreateTexture(nil, "BACKGROUND"))
     fill:SetPoint("TOPLEFT", 0, -B)
     fill:SetPoint("BOTTOMRIGHT", -B, B)
-    fill:SetColorTexture(0.227, 0.208, 0.192, 1)
+    fill:SetColorTexture(0.178, 0.163, 0.151, 1)
 
     return true
 end
