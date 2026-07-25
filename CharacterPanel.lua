@@ -390,8 +390,8 @@ end
 -- Same problem at the bottom: CharacterFrame runs well past the artwork, this
 -- time to leave room for the tab row. The tabs are the measurable thing - they
 -- sit across the artwork's bottom edge, overlapping it by a few pixels.
-local DEFAULT_ART_BOTTOM = 88   -- 512 of frame, 424 of artwork
-local TAB_OVERLAP = 10
+local DEFAULT_ART_BOTTOM = 67
+local TAB_OVERLAP = -11   -- the tabs overlap upward into the artwork
 
 -- How far above CharacterFrame's bottom the artwork ends.
 function Panel.ComputeArtBottom(frameBottom, tabTop)
@@ -402,7 +402,7 @@ function Panel.ComputeArtBottom(frameBottom, tabTop)
 end
 
 -- The close button's own edges sit this far inside the artwork's corner.
-local CLOSE_TO_EDGE = 3
+local CLOSE_TO_EDGE = -8
 
 --------------------------------------------------------------------------
 -- Borrowing the character frame's own chrome
@@ -421,7 +421,11 @@ local CLOSE_TO_EDGE = 3
 --------------------------------------------------------------------------
 
 -- Coordinates within the artwork's own 384x512 layout.
-local ART_VISIBLE_RIGHT = 359   -- where the frame's right border ends
+-- All measured off screenshot pixels rather than estimated: the artwork's
+-- visible edges sit inside its 384x512 layout, with transparent padding on
+-- every side, and every one of these was originally guessed wrong.
+local ART_VISIBLE_RIGHT = 348   -- where the frame's right border ends
+local ART_TOP_PADDING = 5       -- transparent rows above the top border
 local ART_BORDER = 11           -- how thick that border is
 
 -- Stretches of border known to be free of decoration. Whole quadrants can't be
@@ -512,11 +516,11 @@ local function BuildChrome(target)
     local B = ns.Config:Get("artBorder") or ART_BORDER
     local R = ART_VISIBLE_RIGHT
 
-    local top = keep(Slice(target, quads.topLeft, CLEAN_TOP_X1, CLEAN_TOP_X2, 0, B))
+    local top = keep(Slice(target, quads.topLeft, CLEAN_TOP_X1, CLEAN_TOP_X2, ART_TOP_PADDING, ART_TOP_PADDING + B))
     top:SetPoint("TOPLEFT")
     top:SetPoint("BOTTOMRIGHT", target, "TOPRIGHT", -B, -B)
 
-    local bottom = keep(Slice(target, quads.topLeft, CLEAN_TOP_X1, CLEAN_TOP_X2, 0, B, true))
+    local bottom = keep(Slice(target, quads.topLeft, CLEAN_TOP_X1, CLEAN_TOP_X2, ART_TOP_PADDING, ART_TOP_PADDING + B, true))
     bottom:SetPoint("BOTTOMLEFT")
     bottom:SetPoint("TOPRIGHT", target, "BOTTOMRIGHT", -B, B)
 
@@ -528,13 +532,13 @@ local function BuildChrome(target)
     right:SetPoint("TOPRIGHT", target, "TOPRIGHT", 0, -B)
     right:SetPoint("BOTTOMRIGHT", target, "BOTTOMRIGHT", 0, B)
 
-    local topCorner = keep(Slice(target, quads.topRight, R - B, R, 0, B))
+    local topCorner = keep(Slice(target, quads.topRight, R - B, R, ART_TOP_PADDING, ART_TOP_PADDING + B))
     topCorner:SetSize(B, B)
     topCorner:SetPoint("TOPRIGHT")
 
     -- The real bottom-right corner sits next to the tab hardware, so the top
     -- corner is mirrored down instead.
-    local bottomCorner = keep(Slice(target, quads.topRight, R - B, R, 0, B, true))
+    local bottomCorner = keep(Slice(target, quads.topRight, R - B, R, ART_TOP_PADDING, ART_TOP_PADDING + B, true))
     bottomCorner:SetSize(B, B)
     bottomCorner:SetPoint("BOTTOMRIGHT")
 
@@ -556,14 +560,14 @@ local function VisibleCorner()
     -- resulting height stopped matching the 424 the artwork actually is.
     local close = _G.CharacterFrameCloseButton
     if close and close:GetRight() then
-        return close:GetRight() + CLOSE_TO_EDGE, CharacterFrame:GetTop()
+        return close:GetRight() + CLOSE_TO_EDGE, CharacterFrame:GetTop() - ART_TOP_PADDING
     end
     local left, right = ColumnEdgeSlots()
     local inset = (left and right)
         and Panel.ComputeArtInset(CharacterFrame:GetLeft(), CharacterFrame:GetRight(),
                 left:GetLeft(), right:GetRight())
         or DEFAULT_ART_INSET
-    return CharacterFrame:GetRight() + inset, CharacterFrame:GetTop()
+    return CharacterFrame:GetRight() + inset, CharacterFrame:GetTop() - ART_TOP_PADDING
 end
 
 -- nil if the frame hasn't been laid out yet.
@@ -594,7 +598,7 @@ local function FitToFrame()
     -- the artwork's top-right. Deriving it from the slot columns doesn't work:
     -- they aren't symmetric within the artwork (left margin 21, right nearer
     -- 9), so mirroring one onto the other overshoots by about ten pixels.
-    local right = (VisibleCorner())
+    local right, top = VisibleCorner()
     local x = (right - CharacterFrame:GetLeft()) + nudge
 
     local tab1 = _G.CharacterFrameTab1
@@ -605,7 +609,7 @@ local function FitToFrame()
     -- The borrowed chrome brings its own transparent padding, exactly as the
     -- character frame's does, so nothing here is inflated to compensate.
     panel:ClearAllPoints()
-    panel:SetPoint("TOPLEFT", CharacterFrame, "TOPLEFT", x, 0)
+    panel:SetPoint("TOPLEFT", CharacterFrame, "TOPLEFT", x, top - CharacterFrame:GetTop())
     panel:SetPoint("BOTTOMLEFT", CharacterFrame, "BOTTOMLEFT", x, bottom)
 
     -- Slide the borrowed artwork so its right border lands on the panel's

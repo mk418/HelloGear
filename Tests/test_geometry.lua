@@ -78,22 +78,23 @@ check(ComputeArtInset(0, 384, 0, 0), ComputeArtInset(0, 384, 21, 343),
 
 local ComputeArtBottom = ns.Panel.ComputeArtBottom
 
--- Stock frame: 512 tall holding 424 of artwork, so the artwork ends 88 above
--- the frame's bottom. Tabs overlap that edge by ~10, putting their top at 78.
-check(ComputeArtBottom(0, 78), 88, "stock tab row")
+-- Measured off screenshot pixels: the tab row's top sits 78 above the frame's
+-- bottom, and the tabs overlap upward INTO the artwork, whose bottom edge is
+-- therefore 11 below that - 67 above the frame's bottom, not above the tabs.
+check(ComputeArtBottom(0, 78), 67, "measured tab row")
 
 -- Position-independent, like the horizontal fit.
-check(ComputeArtBottom(400, 478), 88, "frame moved up the screen")
+check(ComputeArtBottom(400, 478), 67, "frame moved up the screen")
 
 -- No tab row to measure gives the stock answer rather than an error.
-check(ComputeArtBottom(0, nil), 88, "missing tab row falls back")
+check(ComputeArtBottom(0, nil), 67, "missing tab row falls back")
 
 -- Nonsense in, fallback out: tabs above the frame, or absurdly far up it.
-check(ComputeArtBottom(0, -50), 88, "tab below the frame bottom")
-check(ComputeArtBottom(0, 500), 88, "tab most of the way up the frame")
+check(ComputeArtBottom(0, -50), 67, "tab below the frame bottom")
+check(ComputeArtBottom(0, 500), 67, "tab most of the way up the frame")
 
 -- A genuinely different tab position is followed, not snapped to the default.
-check(ComputeArtBottom(0, 110), 120, "taller tab offset is respected")
+check(ComputeArtBottom(0, 110), 99, "taller tab offset is respected")
 
 --------------------------------------------------------------------------
 -- Slicing the character frame's artwork. The quadrants are laid out
@@ -109,17 +110,19 @@ local function coords(...)
     return string.format("%.4f %.4f %.4f %.4f", ...)
 end
 
--- An 11px strip along the top border, sampled from a plain run of it.
-check(coords(TexCoords(topLeft, 120, 240, 0, 11)),
-    coords(120/256, 240/256, 0, 11/256), "top border strip")
+-- An 11px strip along the top border. It starts below the artwork's 5 rows of
+-- transparent padding: sampling from row zero caught the padding instead of
+-- the border, and drew nothing at all.
+check(coords(TexCoords(topLeft, 120, 240, 5, 16)),
+    coords(120/256, 240/256, 5/256, 16/256), "top border strip")
 
--- The right border, 11px wide, ending at the artwork's visible edge of 359.
-check(coords(TexCoords(topRight, 348, 359, 60, 62)),
-    coords((348-256)/128, (359-256)/128, 60/256, 62/256), "right border strip")
+-- The right border, 11px wide, ending at the artwork's visible edge of 348.
+check(coords(TexCoords(topRight, 337, 348, 60, 62)),
+    coords((337-256)/128, (348-256)/128, 60/256, 62/256), "right border strip")
 
 -- Every coordinate has to land inside the texture, or the slice samples
 -- neighbouring artwork - which is how the paperdoll's slot recesses got in.
-local l, r, t, b = TexCoords(topRight, 348, 359, 0, 11)
+local l, r, t, b = TexCoords(topRight, 337, 348, 5, 16)
 check(l >= 0 and l <= 1 and r >= 0 and r <= 1, true, "right strip u in range")
 check(t >= 0 and t <= 1 and b >= 0 and b <= 1, true, "right strip v in range")
 
