@@ -439,6 +439,30 @@ function Equip:ToggleSet(name)
     return self:EquipSet(resolved)
 end
 
+-- Everything off, into the bags. Every slot the engine already knows how to
+-- empty; this is just all of them at once, so it inherits the bag-space check
+-- and the retry loop rather than reimplementing either.
+function Equip:Undress()
+    local equip, count = {}, 0
+    for _, def in ipairs(ns.SLOTS) do
+        if Items.GetWorn(def.id) then
+            equip[def.id] = ns.EMPTY
+            count = count + 1
+        end
+    end
+    if count == 0 then
+        ns:Print("nothing to take off")
+        return false
+    end
+    -- Deliberately not recorded as a set's restore: there's no set involved,
+    -- and silently overwriting one to make this undoable would be worse than
+    -- not being undoable.
+    return self:Start({
+        equip = equip,
+        label = ("took off %d item(s)"):format(count),
+    })
+end
+
 -- Single-item swap, used by the paperdoll slot menus.
 function Equip:EquipItem(gearID, slot)
     return self:Start({

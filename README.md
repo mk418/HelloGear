@@ -44,6 +44,7 @@ Sets are per character. A set only touches the slots it manages, so a one-slot s
 /hg toggle <set>         equip a set, or put back what it replaced
 /hg unequip <set>        put back what the set replaced
 /hg save <set>           save currently worn gear as <set>
+/hg undress              take everything off, into your bags
 /hg delete <set>         delete a set
 /hg list                 list sets
 /hg manage               open the gear set panel

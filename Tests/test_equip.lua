@@ -875,6 +875,48 @@ scenario("a re-enchanted item is not missing, a different suffix is", function()
 end)
 
 ------------------------------------------------------------------
+scenario("undressing puts everything into the bags", function()
+    local helm, chest, sword = G(100), G(101), G(105)
+    world.worn[1] = helm
+    world.worn[5] = chest
+    world.worn[16] = sword
+
+    Equip:Undress()
+    drain()
+
+    check(world.worn[1] == nil and world.worn[5] == nil and world.worn[16] == nil,
+        "every slot is empty")
+    check(bagContains(helm) and bagContains(chest) and bagContains(sword),
+        "and everything is in the bags")
+end)
+
+------------------------------------------------------------------
+scenario("undressing with nothing on says so and does nothing", function()
+    check(Equip:Undress() == false, "declines")
+    check(Equip.job == nil, "with no job started")
+    local told = false
+    for _, m in ipairs(messages) do if m:match("nothing to take off") then told = true end end
+    check(told, "and says why")
+end)
+
+------------------------------------------------------------------
+scenario("undressing without bag space reports it", function()
+    world.worn[1] = G(100)
+    world.worn[5] = G(101)
+    for bag = 0, 4 do
+        for slot = 1, world.bags[bag].size do world.bags[bag].items[slot] = G(107) end
+    end
+
+    Equip:Undress()
+    drain()
+
+    check(world.worn[1] ~= nil, "gear stays on rather than vanishing")
+    local told = false
+    for _, m in ipairs(messages) do if m:match("no free bag space") then told = true end end
+    check(told, "and the lack of room is reported")
+end)
+
+------------------------------------------------------------------
 print("")
 if failures == 0 then
     print(("ALL %d CHECKS PASSED"):format(tests))

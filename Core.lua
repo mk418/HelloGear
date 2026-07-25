@@ -130,6 +130,7 @@ local usage = {
     "  /hg equip <set>         - equip a set",
     "  /hg toggle <set>        - equip a set, or put back what it replaced",
     "  /hg unequip <set>       - put back what the set replaced",
+    "  /hg undress             - take everything off, into your bags",
     "  /hg save <set>          - save currently worn gear as <set>",
     "  /hg delete <set>        - delete a set",
     "  /hg list                - list sets",
@@ -158,6 +159,8 @@ SlashCmdList["HELLOGEAR"] = function(msg)
         ns.Equip:ToggleSet(rest)
     elseif cmd == "unequip" then
         ns.Equip:UnequipSet(rest)
+    elseif cmd == "undress" then
+        ns.Equip:Undress()
     elseif cmd == "save" then
         if rest == "" then
             ns:Print("usage: /hg save <set>")
