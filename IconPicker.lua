@@ -73,22 +73,74 @@ local function AppendMacroIcons(list, seen)
     end
 end
 
+-- Anything whose icon we can put a name to, we do. On a client that hands back
+-- bare file IDs the macro list carries no names at all, so this is the whole
+-- of what searching can cover: the set's own gear, everything else you're
+-- carrying, and every spell you know. An icon shared with one of those becomes
+-- searchable by that thing's name, which is what you'd type anyway.
+local function AppendNamedIcons(list, seen, gearIDs)
+    local function add(texture, name)
+        if texture and not seen[texture] then
+            seen[texture] = true
+            list[#list + 1] = {
+                texture = texture,
+                name = (name and name ~= "" and name:lower()) or TextureName(texture),
+            }
+        end
+    end
+
+    for _, gearID in ipairs(gearIDs) do
+        local itemName, texture = Items.GetInfo(gearID)
+        add(texture, itemName)
+    end
+
+    -- Spellbook APIs differ across clients and neither is guaranteed; a miss
+    -- here just means fewer names, so it fails quietly.
+    local index = 1
+    while index < 600 do
+        local name, texture
+        if _G.C_SpellBook and _G.C_SpellBook.GetSpellBookItemName then
+            local bank = _G.Enum and _G.Enum.SpellBookSpellBank and _G.Enum.SpellBookSpellBank.Player
+            local ok, spellName = pcall(_G.C_SpellBook.GetSpellBookItemName, index, bank)
+            if not ok then break end
+            name = spellName
+            local fine, spellTexture = pcall(_G.C_SpellBook.GetSpellBookItemTexture, index, bank)
+            texture = fine and spellTexture or nil
+        elseif type(_G.GetSpellBookItemName) == "function" then
+            local ok, spellName = pcall(_G.GetSpellBookItemName, index, "spell")
+            if not ok then break end
+            name = spellName
+            local fine, spellTexture = pcall(_G.GetSpellBookItemTexture, index, "spell")
+            texture = fine and spellTexture or nil
+        else
+            break
+        end
+        if not name then break end
+        add(texture, name)
+        index = index + 1
+    end
+end
+
 local function BuildEntries(set)
     local list, seen = {}, {}
 
+    -- The set's own gear leads: nine times out of ten the icon you want is
+    -- something the set puts on.
+    local setGear = {}
     for _, def in ipairs(ns.SLOTS) do
         local gearID = set.equip[def.id]
-        if gearID and gearID ~= ns.EMPTY then
-            local itemName, texture = Items.GetInfo(gearID)
-            if texture and not seen[texture] then
-                seen[texture] = true
-                list[#list + 1] = {
-                    texture = texture,
-                    name = itemName and itemName:lower() or TextureName(texture),
-                }
-            end
-        end
+        if gearID and gearID ~= ns.EMPTY then setGear[#setGear + 1] = gearID end
     end
+    AppendNamedIcons(list, seen, setGear)
+
+    local carried = {}
+    for _, gearID in pairs(Items.GetWornSet()) do carried[#carried + 1] = gearID end
+    for _, entry in ipairs(Items.ScanBags()) do carried[#carried + 1] = entry.gearID end
+    if ns.Bank and ns.Bank:IsOpen() then
+        for _, entry in ipairs(Items.ScanBank()) do carried[#carried + 1] = entry.gearID end
+    end
+    AppendNamedIcons(list, seen, carried)
+
     AppendMacroIcons(list, seen)
 
     local named = 0
@@ -287,6 +339,11 @@ function IconPicker:Open(set, anchor, callback)
             GameTooltip:AddLine("Search icon names", 1, 1, 1)
             GameTooltip:AddLine(("%d of %d icons have a name to search"):format(namedCount, #entries),
                 0.7, 0.7, 0.7)
+            if namedCount < #entries then
+                GameTooltip:AddLine("This client reports its icons as bare file IDs, which carry " ..
+                    "no name. Searchable ones are those shared with your gear or your spells.",
+                    0.6, 0.6, 0.6, true)
+            end
             GameTooltip:Show()
         end)
     else
