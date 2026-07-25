@@ -8,10 +8,14 @@ local Sets = ns.Sets
 local PANEL_WIDTH = 214
 local PANEL_HEIGHT = 400   -- provisional; FitToFrame anchors top and bottom
 local ROW_HEIGHT = 36
-local CONTENT_LEFT = ns.CHROME_INSET + 16    -- clear of the border
-local CONTENT_RIGHT = -(ns.CHROME_INSET + 34) -- border, plus the scrollbar
-local FRAME_WIDTH = PANEL_WIDTH + ns.CHROME_INSET * 2
-local ROW_WIDTH = FRAME_WIDTH + CONTENT_RIGHT - CONTENT_LEFT
+local CONTENT_LEFT = 16    -- clear of the border
+local CONTENT_RIGHT = -34  -- border, plus room for the scrollbar inside it
+-- Clear air between the character frame's edge and the panel's. The panel is
+-- its own window standing beside the character sheet, the way the guild
+-- information window does - not a continuation of it - so the two borders stay
+-- visibly separate rather than sharing a seam.
+local PANEL_GAP = 6
+local ROW_WIDTH = PANEL_WIDTH + CONTENT_RIGHT - CONTENT_LEFT
 local BUTTON_SIZE = 26
 
 
@@ -437,13 +441,6 @@ local ART_TOP_PADDING = 5       -- transparent rows above the artwork's top
 -- The fill keeps the character frame's header band colour, measured at RGB
 -- 58,53,49 - the input is lower than that fraction because the client renders
 -- a colour texture lighter than its nominal value.
-local FILL_COLOUR = { 0.178, 0.163, 0.151, 1 }
-
--- The border draws this far inside the frame's bounds, so the panel is
--- inflated by it on every side and its drawn edges land where the artwork's
--- are. PANEL_WIDTH stays the width you actually see.
-local PAD = ns.CHROME_INSET
-
 -- Right and top of the frame you can actually see. Preferred reference is the
 -- close button, which Blizzard pins to the artwork's top-right corner; the
 -- slot-column derivation is the fallback for a frame without one.
@@ -484,31 +481,21 @@ local function FitToFrame()
 
     local nudge = ns.Config:Get("dockNudge") or 0
 
-    -- Now that the character frame is modern chrome, its border is a nine-slice
-    -- whose bounds ARE the frame you can see - which is the thing every
-    -- derivation up to here was trying to reconstruct by measuring around it.
-    -- Anchor to it directly and the panel matches on all three edges at once.
     -- The visible corner comes from the close button, which Blizzard pins to
     -- the artwork's top-right. Deriving it from the slot columns doesn't work:
     -- they aren't symmetric within the artwork (left margin 21, right nearer
     -- 9), so mirroring one onto the other overshoots by about ten pixels.
     local right, top = VisibleCorner()
-    local x = (right - CharacterFrame:GetLeft()) - PAD + nudge
+    local x = (right - CharacterFrame:GetLeft()) + PANEL_GAP + nudge
 
     local tab1 = _G.CharacterFrameTab1
     local bottom = Panel.ComputeArtBottom(CharacterFrame:GetBottom(), tab1 and tab1:GetTop())
 
-    -- The panel's bounds are the artwork's bounds: left edge on the character
-    -- frame's right edge, top flush with it, bottom on the artwork's bottom.
-    -- The borrowed chrome brings its own transparent padding, exactly as the
-    -- character frame's does, so nothing here is inflated to compensate.
+    -- Top and bottom track the artwork's, so the panel stands the same height
+    -- as the character sheet beside it; the gap keeps them separate windows.
     panel:ClearAllPoints()
-    panel:SetPoint("TOPLEFT", CharacterFrame, "TOPLEFT", x,
-        (top - CharacterFrame:GetTop()) + PAD)
-    panel:SetPoint("BOTTOMLEFT", CharacterFrame, "BOTTOMLEFT", x, bottom - PAD)
-
-    -- Slide the borrowed artwork so its right border lands on the panel's
-    -- right edge; the rest runs off to the left, behind the character frame.
+    panel:SetPoint("TOPLEFT", CharacterFrame, "TOPLEFT", x, top - CharacterFrame:GetTop())
+    panel:SetPoint("BOTTOMLEFT", CharacterFrame, "BOTTOMLEFT", x, bottom)
 end
 
 -- Prints what the addon can actually see of the character frame. Guessing at
@@ -624,20 +611,16 @@ local function BuildPanel()
     end)
 
     panel = CreateFrame("Frame", "HelloGearCharacterPanel", CharacterFrame, "BackdropTemplate")
-    panel:SetSize(FRAME_WIDTH, PANEL_HEIGHT)
+    panel:SetSize(PANEL_WIDTH, PANEL_HEIGHT)
     -- Provisional; FitToFrame docks it flush against the artwork once the
     -- character frame has been laid out.
     panel:SetPoint("TOPLEFT", CharacterFrame, "TOPRIGHT", -45, -12)
-    -- Behind the character frame, not in front. The panel's left edge is tucked
-    -- under the character frame's right border, and letting that border draw
-    -- over it makes the seam between the two the character frame's own artwork
-    -- - which matches by definition, instead of a second border in a slightly
-    -- different style butted up against the first.
-    panel:SetFrameLevel(math.max(0, CharacterFrame:GetFrameLevel() - 1))
+    -- In front now that it stands apart: there is nothing to tuck under.
+    panel:SetFrameLevel(CharacterFrame:GetFrameLevel() + 1)
     panel:EnableMouse(true)
     panel:Hide()
 
-    ns.ApplyChrome(panel, FILL_COLOUR)
+    ns.ApplyChrome(panel)
 
     local title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
     title:SetPoint("TOPLEFT", CONTENT_LEFT + 2, -18)
