@@ -83,6 +83,7 @@ ns:On("PLAYER_LOGIN", function()
     CheckAPI()
     ns.Sets:Init()
     ns.Equip:Init()
+    ns.Bank:Init()
     ns.Menu:Init()
     ns.Minimap:Init()
     ns.Paperdoll:Init()
@@ -134,6 +135,8 @@ local usage = {
     "  /hg list                - list sets",
     "  /hg manage              - open the gear set panel on the character sheet",
     "  /hg import [force]      - import sets from ItemRack",
+    "  /hg bank get <set>      - take a set out of the bank",
+    "  /hg bank put <set>      - put a set into the bank",
     "  /hg dock [pixels]       - report or nudge where the panel docks",
     "  /hg config              - open the options panel",
     "  /hg reset               - wipe all HelloGear data and reload",
@@ -183,6 +186,16 @@ SlashCmdList["HELLOGEAR"] = function(msg)
         end
     elseif cmd == "manage" then
         ns.Panel:Toggle()
+    elseif cmd == "bank" then
+        local action, name = rest:match("^(%S+)%s+(.+)$")
+        action = action and action:lower()
+        if action == "get" then
+            ns.Bank:Withdraw(name)
+        elseif action == "put" then
+            ns.Bank:Deposit(name)
+        else
+            ns:Print("usage: /hg bank get <set> | /hg bank put <set>")
+        end
     elseif cmd == "import" then
         ns.Import:Run(rest:lower() == "force")
     elseif cmd == "dock" then

@@ -26,6 +26,7 @@ That single break isn't worth a fork. The interesting part is that the surroundi
 - **Sets** — create from worn gear, rename, delete, per-slot editing, per-character storage.
 - **Equipping** — one-click equip, toggle (equip / put back what it displaced), single-item swaps.
 - **ItemRack import** — sets, icons, hidden flags, helm/cloak toggles, deliberate-empty slots.
+- **Bank** — fetch a set's gear out of the bank, or put it away, while the bank window is open.
 - **Set menu** — minimap button opens a list; click equips, shift-click toggles, right-click restores.
 - **Character-sheet panel** — a button on the character frame opens a docked gear-set panel, and the paperdoll itself becomes the set editor.
 - **Paperdoll slot menus** — every character-sheet slot gets a menu of the alternatives in your bags, with cooldown swirls.
@@ -35,7 +36,6 @@ That single break isn't worth a fork. The interesting part is that the surroundi
 
 - **Auto-swap events.** Equipping gear on stance change, zone entry or buff gain. ItemRack shipped this; it's a rules engine, and a rules engine that fires during a pull is a liability.
 - **Cooldown queues.** Rotating trinkets by cooldown.
-- **Bank access.** The client only exposes bank contents while a bank window is open, so a set referencing banked gear can't be resolved when you actually want it.
 - **Anything outside Classic Era.**
 
 ---
@@ -52,6 +52,7 @@ HelloGear/
 ├── Sets.lua            -- set CRUD, save-from-worn, equipped tests
 ├── Equip.lua           -- the swap engine
 ├── Import.lua          -- ItemRack import and snapshotting
+├── Bank.lua            -- moving a set's gear to and from the bank
 ├── Menu.lua            -- the quick set menu (and shared popup chrome)
 ├── Minimap.lua         -- minimap button
 ├── Paperdoll.lua       -- everything attached to character-sheet slots:
@@ -179,6 +180,21 @@ The two are separate because "the set clears this slot" and "the set ignores thi
 **What didn't fit.** A 200px column has room for the set list and Equip/Save. Renaming, the icon, the helm/cloak toggles and the menu-visibility flag are all things you set once and never touch again, so they moved behind a gear button on each row.
 
 Slot state and the edit cycle live in `Sets.lua`, not in the UI file, so they can be tested without a character sheet to click on.
+
+---
+
+## The bank
+
+The client only reports what's in the bank while the bank window is open, which shapes the whole feature: this can't be something the swap engine reaches for on its own. Equipping never looks in the bank, because the moment you actually want a set is the moment you're nowhere near one.
+
+So it's two explicit actions, on the panel and on `/hg bank get|put`, both disabled with an explanation unless the window is up:
+
+- **From bank** moves the set's gear into your bags, skipping anything already on you or already carried.
+- **To bank** moves the set's gear out of your bags. Worn gear stays on — stripping a set off to put it away is what unequipping is for, and doing it implicitly would be a nasty surprise.
+
+The move loop is the swap engine's shape: recompute from the world each pass, move what can be moved, wait for the locks, go again. It gives up if the bank window closes underneath it.
+
+One small thing this makes possible: when a swap can't find something and the bank happens to be open, it now says how many of the missing pieces are sitting in there rather than just reporting them absent.
 
 ---
 

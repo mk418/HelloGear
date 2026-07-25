@@ -23,6 +23,7 @@ local BUTTON_SIZE = 26
 
 
 local panel, toggle, scroll, content, scrollBar, statusText, editButton, equipButton, saveButton
+local bankGetButton, bankPutButton
 local rows = {}
 local options          -- the per-set options popout
 local selected
@@ -674,8 +675,42 @@ local function BuildPanel()
     end)
     saveButton:SetScript("OnLeave", GameTooltip_Hide)
 
+    bankGetButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    bankGetButton:SetSize(83, 22)
+    bankGetButton:SetPoint("TOPLEFT", equipButton, "BOTTOMLEFT", 0, -4)
+    bankGetButton:SetText("From bank")
+    bankGetButton:SetScript("OnClick", function()
+        if selected then ns.Bank:Withdraw(selected) end
+    end)
+
+    bankPutButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    bankPutButton:SetSize(83, 22)
+    bankPutButton:SetPoint("LEFT", bankGetButton, "RIGHT", 4, 0)
+    bankPutButton:SetText("To bank")
+    bankPutButton:SetScript("OnClick", function()
+        if selected then ns.Bank:Deposit(selected) end
+    end)
+
+    local function BankTooltip(self, line)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:AddLine(line, 1, 1, 1, true)
+        if not ns.Bank:IsOpen() then
+            GameTooltip:AddLine("Open your bank first - the client only reports " ..
+                "what's in there while the window is up.", 1, 0.5, 0.5, true)
+        end
+        GameTooltip:Show()
+    end
+    bankGetButton:SetScript("OnEnter", function(self)
+        BankTooltip(self, "Move this set's gear from the bank into your bags")
+    end)
+    bankPutButton:SetScript("OnEnter", function(self)
+        BankTooltip(self, "Move this set's gear from your bags into the bank. Worn gear stays on.")
+    end)
+    bankGetButton:SetScript("OnLeave", GameTooltip_Hide)
+    bankPutButton:SetScript("OnLeave", GameTooltip_Hide)
+
     scroll = CreateFrame("ScrollFrame", "HelloGearCharacterPanelScroll", panel, "UIPanelScrollFrameTemplate")
-    scroll:SetPoint("TOPLEFT", CONTENT_LEFT, -68)
+    scroll:SetPoint("TOPLEFT", CONTENT_LEFT, -94)
     scroll:SetPoint("BOTTOMRIGHT", CONTENT_RIGHT, 90)
 
     content = CreateFrame("Frame", nil, scroll)
@@ -854,6 +889,15 @@ function Panel:Refresh()
     editButton:SetText(editing and "|cffffd200Done editing slots|r" or "Edit slots")
 
     if selected then equipButton:Enable() else equipButton:Disable() end
+
+    local bankReady = selected and ns.Bank:IsOpen()
+    if bankReady then
+        bankGetButton:Enable()
+        bankPutButton:Enable()
+    else
+        bankGetButton:Disable()
+        bankPutButton:Disable()
+    end
 
     -- Save overwrites the set with what you're wearing, which is precisely
     -- what you don't want a click away while editing that set slot by slot -

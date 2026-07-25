@@ -47,6 +47,8 @@ Sets are per character. A set only touches the slots it manages, so a one-slot s
 /hg delete <set>         delete a set
 /hg list                 list sets
 /hg manage               open the gear set panel
+/hg bank get <set>       take a set's gear out of the bank
+/hg bank put <set>       put a set's gear into the bank
 /hg import [force]       import sets from ItemRack
 /hg dock [pixels]        report or nudge where the panel docks
 /hg config               open the options panel
@@ -66,7 +68,7 @@ ItemRack's bare globals — `EquipSet`, `UnequipSet`, `ToggleSet`, `IsSetEquippe
 
 ItemRack's automatic set switching (on stance, zone, buff or mount) and its cooldown-based trinket queues are deliberately absent. See [DESIGN.md](DESIGN.md).
 
-Bank contents aren't reachable — the client only exposes them while a bank window is open — so sets can only use gear you're carrying or wearing.
+The bank is only readable while its window is open, so fetching and stowing are explicit actions rather than something equipping does for you. Equipping uses gear you're carrying or wearing.
 
 ## Caveats
 

@@ -264,6 +264,12 @@ local function FinishJob(job, stalled)
                 or ("item " .. tostring(Items.BaseID(gearID)))
         end
         ns:Print("|cffff8080couldn't find:|r %s", table.concat(names, ", "))
+        -- Only answerable with the bank window up; the client won't report
+        -- its contents otherwise.
+        local inBank = ns.Bank:CountHolding(job.missing)
+        if inBank > 0 then
+            ns:Print("%d of those are in your bank - |cffffff00/hg bank get|r will fetch them", inBank)
+        end
     end
     if stalled then
         ns:Print("|cffff8080gave up on %d slot(s)|r - something kept them locked", stalled)

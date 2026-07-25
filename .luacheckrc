@@ -70,6 +70,7 @@ read_globals = {
     "GetItemInfo",
     "GetItemInfoInstant",
     "NUM_BAG_SLOTS",
+    "NUM_BANKBAGSLOTS",
     -- Inventory
     "GetInventorySlotInfo",
     "GetInventoryItemLink",

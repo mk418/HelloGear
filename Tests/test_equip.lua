@@ -26,11 +26,19 @@ DefItem(109, "INVTYPE_WRIST",          "Bracers")   -- random suffix carrier
 DefItem(110, "INVTYPE_WEAPONOFFHAND",  "Offhand")
 DefItem(111, "INVTYPE_HEAD",           "Helm B")
 
+NUM_BANKBAGSLOTS = 6
+
 local function reset()
     world.worn = {}
     world.bags = {}
     for bag = 0, 4 do
-        world.bags[bag] = { size = (bag == 0 and 16 or 16), items = {} }
+        world.bags[bag] = { size = 16, items = {} }
+    end
+    -- The bank: the main window is container -1, its purchased bags follow the
+    -- player's own.
+    world.bags[-1] = { size = 24, items = {} }
+    for bag = 5, 4 + NUM_BANKBAGSLOTS do
+        world.bags[bag] = { size = 16, items = {} }
     end
     world.cursor = nil
     world.time = 1000
@@ -266,6 +274,15 @@ ns.Menu = { Refresh = function() end }
 ns.Panel = { Refresh = function() end }
 ns.Paperdoll = { Refresh = function() end }
 
+local handlers = {}
+function ns:On(event, fn)
+    handlers[event] = handlers[event] or {}
+    table.insert(handlers[event], fn)
+end
+local function Fire(event, ...)
+    for _, fn in ipairs(handlers[event] or {}) do fn(...) end
+end
+
 local function load_addon_file(name)
     local chunk, err = loadfile(ADDON .. "/" .. name)
     if not chunk then error(err) end
@@ -275,9 +292,11 @@ end
 load_addon_file("Items.lua")
 load_addon_file("Sets.lua")
 load_addon_file("Equip.lua")
+load_addon_file("Bank.lua")
 
-local Items, Sets, Equip = ns.Items, ns.Sets, ns.Equip
+local Items, Sets, Equip, Bank = ns.Items, ns.Sets, ns.Equip, ns.Bank
 Equip:Init()
+Bank:Init()
 
 --------------------------------------------------------------------------
 -- Driving a swap to completion
@@ -291,6 +310,18 @@ local function drain()
         world.time = world.time + 0.05
         for _, t in ipairs(tickers) do
             if not t.cancelled and Equip.job then t.fn() end
+        end
+    end
+end
+
+local function drainBank()
+    local guard = 0
+    while Bank.job do
+        guard = guard + 1
+        if guard > 200 then error("bank job never finished") end
+        world.time = world.time + 0.05
+        for _, t in ipairs(tickers) do
+            if not t.cancelled and Bank.job then t.fn() end
         end
     end
 end
@@ -331,6 +362,9 @@ end
 
 local function scenario(name, fn)
     reset()
+    -- Bank state is global to the module, so close it between scenarios or one
+    -- that opened it leaks into the next.
+    Fire("BANKFRAME_CLOSED")
     HelloGearCharDB.sets, HelloGearCharDB.order = {}, {}
     HelloGearCharDB.currentSet = nil
     messages = {}
@@ -721,6 +755,77 @@ scenario("saving worn gear replaces a set rather than merging into it", function
     check(set.equip[1] == helm, "a hand-picked slot is overwritten by what's worn")
     check(set.equip[5] == chest, "slots the set didn't manage get added")
     check(set.equip[17] == nil, "a deliberate empty is dropped, not preserved")
+end)
+
+------------------------------------------------------------------
+scenario("withdrawing pulls a set's banked gear into the bags", function()
+    Fire("BANKFRAME_OPENED")
+    local helm, chest, worn = G(100), G(101), G(105)
+    world.bags[-1].items[3] = helm
+    world.bags[6].items[2] = chest
+    world.worn[16] = worn
+    Sets:Create("Raid", { equip = { [1] = helm, [5] = chest, [16] = worn } })
+
+    Bank:Withdraw("Raid")
+    drainBank()
+
+    check(bagContains(helm), "banked helm came out")
+    check(bagContains(chest), "gear in a bank bag came out too")
+    check(world.bags[-1].items[3] == nil, "and left the bank")
+    check(world.worn[16] == worn, "what you're wearing is left alone")
+end)
+
+------------------------------------------------------------------
+scenario("withdrawing skips what you already have", function()
+    Fire("BANKFRAME_OPENED")
+    local helm = G(100)
+    putBag(helm, 0, 1)
+    world.bags[-1].items[3] = helm
+    Sets:Create("Raid", { equip = { [1] = helm } })
+
+    Bank:Withdraw("Raid")
+    drainBank()
+
+    check(world.bags[-1].items[3] == helm, "the bank's copy stays put")
+end)
+
+------------------------------------------------------------------
+scenario("depositing puts a set's bagged gear away and leaves worn gear on", function()
+    Fire("BANKFRAME_OPENED")
+    local helm, chest, worn = G(100), G(101), G(105)
+    putBag(helm, 0, 1)
+    putBag(chest, 0, 2)
+    world.worn[16] = worn
+    Sets:Create("Raid", { equip = { [1] = helm, [5] = chest, [16] = worn } })
+
+    Bank:Deposit("Raid")
+    drainBank()
+
+    check(not bagContains(helm), "helm left the bags")
+    check(not bagContains(chest), "chest left the bags")
+    check(world.worn[16] == worn, "worn gear is not stripped to deposit it")
+
+    local banked = 0
+    for _, entry in ipairs(Items.ScanBank()) do
+        if entry.gearID == helm or entry.gearID == chest then banked = banked + 1 end
+    end
+    check(banked == 2, "both landed in the bank")
+end)
+
+------------------------------------------------------------------
+scenario("the bank is untouchable with the window shut", function()
+    local helm = G(100)
+    world.bags[-1].items[3] = helm
+    Sets:Create("Raid", { equip = { [1] = helm } })
+
+    -- No BANKFRAME_OPENED: the client wouldn't report the contents anyway.
+    Bank:Withdraw("Raid")
+
+    check(Bank.job == nil, "no job starts")
+    check(world.bags[-1].items[3] == helm, "nothing moves")
+    local told = false
+    for _, m in ipairs(messages) do if m:match("open the bank") then told = true end end
+    check(told, "and it says why")
 end)
 
 ------------------------------------------------------------------

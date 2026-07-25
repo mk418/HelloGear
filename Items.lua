@@ -243,6 +243,57 @@ function Items.ScanBags()
     return out
 end
 
+--------------------------------------------------------------------------
+-- The bank
+--
+-- Readable only while the bank window is open - the client simply doesn't
+-- report its contents otherwise - so everything here is guarded by that and
+-- the features built on it say so rather than quietly finding nothing.
+--------------------------------------------------------------------------
+
+local BANK_MAIN = -1
+
+function Items.BankContainers()
+    local out = { BANK_MAIN }
+    for index = 1, (NUM_BANKBAGSLOTS or 6) do
+        out[#out + 1] = NUM_BAG_SLOTS + index
+    end
+    return out
+end
+
+function Items.ScanBank()
+    local out = {}
+    for _, bag in ipairs(Items.BankContainers()) do
+        for slot = 1, (GetContainerNumSlots(bag) or 0) do
+            local link = GetContainerItemLink(bag, slot)
+            if link then
+                local gearID = Items.FromLink(link)
+                if gearID then
+                    out[#out + 1] = { bag = bag, slot = slot, gearID = gearID }
+                end
+            end
+        end
+    end
+    return out
+end
+
+function Items.FindFreeBankSlot(claimed)
+    for _, bag in ipairs(Items.BankContainers()) do
+        local _, family = C_Container.GetContainerNumFreeSlots(bag)
+        -- The main bank window has no family; purchased bank bags may be
+        -- profession-only and can't take gear.
+        if bag == BANK_MAIN or not family or family == 0 then
+            for slot = 1, (GetContainerNumSlots(bag) or 0) do
+                local key = bag .. ":" .. slot
+                if not GetContainerItemLink(bag, slot) and not (claimed and claimed[key]) then
+                    if claimed then claimed[key] = true end
+                    return bag, slot
+                end
+            end
+        end
+    end
+end
+
 -- First free, usable bag slot. Profession bags can't hold gear, so anything
 -- with a non-zero family is skipped.
 function Items.FindFreeBagSlot(claimed)

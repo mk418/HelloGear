@@ -15,6 +15,7 @@ Items.lua
 Sets.lua
 Equip.lua
 Import.lua
+Bank.lua
 Menu.lua
 Minimap.lua
 Paperdoll.lua
