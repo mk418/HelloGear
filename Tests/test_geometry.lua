@@ -106,6 +106,11 @@ local topLeft  = { x = 0,   y = 0, width = 256, height = 256 }
 local topRight = { x = 256, y = 0, width = 128, height = 256 }
 local bottomRight = { x = 256, y = -256, width = 128, height = 256 }
 
+-- Blizzard's right-hand quadrants are 128 wide drawn from the left half of a
+-- 256-wide file, so the region carries texcoords of its own.
+local halfWidth = { x = 256, y = 0, width = 128, height = 256,
+                    u0 = 0, u1 = 0.5, v0 = 0, v1 = 1 }
+
 local function coords(...)
     return string.format("%.4f %.4f %.4f %.4f", ...)
 end
@@ -126,6 +131,16 @@ check(coords(TexCoords(topRight, 337, 348, 250, 252)),
 local l, r, t, b = TexCoords(topRight, 337, 348, 5, 16)
 check(l >= 0 and l <= 1 and r >= 0 and r <= 1, true, "right strip u in range")
 check(t >= 0 and t <= 1 and b >= 0 and b <= 1, true, "right strip v in range")
+
+-- A slice of a region that is itself only showing half its file has to land in
+-- that half. Ignoring the region's own texcoords samples the wrong part of the
+-- texture entirely - which is why the border came out as a flat dark band.
+check(coords(TexCoords(halfWidth, 337, 348, 250, 252)),
+    coords(((337-256)/128) * 0.5, ((348-256)/128) * 0.5, 250/256, 252/256),
+    "slice composes with the region's own texcoords")
+
+local hl, hr = TexCoords(halfWidth, 337, 348, 250, 252)
+check(hr <= 0.5, true, "slice stays inside the half the region shows")
 
 -- A bottom quadrant is offset 256 down, so depth has to be measured from the
 -- artwork's top, not the quadrant's.

@@ -451,12 +451,22 @@ local function FrameArtPieces()
             local file = region:GetTexture()
             local point, _, relPoint, ox, oy = region:GetPoint(1)
             if file and point == "TOPLEFT" and relPoint == "TOPLEFT" then
+                -- The region may already be showing only part of its file:
+                -- Blizzard's right-hand quadrants are 128 wide drawn from a
+                -- 256-wide texture. Slicing has to happen inside whatever
+                -- rectangle it's already using, not in whole-file coordinates,
+                -- or SetTexCoord throws that mapping away and samples the
+                -- wrong half. This is why drawing the quadrants whole looked
+                -- right and every sliced version didn't.
+                local ulx, uly, _, lly, urx = region:GetTexCoord()
                 pieces[#pieces + 1] = {
                     file = file,
                     width = region:GetWidth(),
                     height = region:GetHeight(),
                     x = ox or 0,
                     y = oy or 0,
+                    u0 = ulx or 0, u1 = urx or 1,
+                    v0 = uly or 0, v1 = lly or 1,
                 }
             end
         end
@@ -481,8 +491,17 @@ end
 -- measured downward from the artwork's top, the way the layout offsets are.
 function Panel.TexCoords(quad, x1, x2, depth1, depth2)
     local quadTop = -quad.y
-    return (x1 - quad.x) / quad.width, (x2 - quad.x) / quad.width,
-           (depth1 - quadTop) / quad.height, (depth2 - quadTop) / quad.height
+    local fx1 = (x1 - quad.x) / quad.width
+    local fx2 = (x2 - quad.x) / quad.width
+    local fy1 = (depth1 - quadTop) / quad.height
+    local fy2 = (depth2 - quadTop) / quad.height
+
+    -- Map the fraction of the region onto the slice of the file the region is
+    -- actually showing.
+    local u0, u1 = quad.u0 or 0, quad.u1 or 1
+    local v0, v1 = quad.v0 or 0, quad.v1 or 1
+    return u0 + fx1 * (u1 - u0), u0 + fx2 * (u1 - u0),
+           v0 + fy1 * (v1 - v0), v0 + fy2 * (v1 - v0)
 end
 local TexCoords = Panel.TexCoords
 
@@ -683,10 +702,12 @@ function Panel:ReportArtwork()
                     if atlas or texture then
                         shown = shown + 1
                         local point, _, relPoint, ox, oy = region:GetPoint(1)
-                        ns:Print("  %s  %.0fx%.0f  %s->%s %.0f,%.0f",
+                        local ulx, uly, _, lly, urx = region:GetTexCoord()
+                        ns:Print("  %s  %.0fx%.0f  %s->%s %.0f,%.0f  tex u%.3f-%.3f v%.3f-%.3f",
                             tostring(atlas or texture),
                             region:GetWidth() or 0, region:GetHeight() or 0,
-                            tostring(point), tostring(relPoint), ox or 0, oy or 0)
+                            tostring(point), tostring(relPoint), ox or 0, oy or 0,
+                            ulx or 0, urx or 1, uly or 0, lly or 1)
                     end
                 end
             end
