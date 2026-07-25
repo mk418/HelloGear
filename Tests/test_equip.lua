@@ -707,6 +707,23 @@ scenario("item cooldowns are read from the item's location", function()
 end)
 
 ------------------------------------------------------------------
+scenario("saving worn gear replaces a set rather than merging into it", function()
+    -- This is what the panel's Save button does, and it's why Save is turned
+    -- off while a set is being edited slot by slot: it replaces every slot
+    -- from the character, so a click would discard everything just chosen.
+    local helm, chest, picked = G(100), G(101), G(111)
+    world.worn[1] = helm
+    world.worn[5] = chest
+    local set = Sets:Create("Edit", { equip = { [1] = picked, [17] = ns.EMPTY } })
+
+    Sets:SaveFromWorn("Edit", true)
+
+    check(set.equip[1] == helm, "a hand-picked slot is overwritten by what's worn")
+    check(set.equip[5] == chest, "slots the set didn't manage get added")
+    check(set.equip[17] == nil, "a deliberate empty is dropped, not preserved")
+end)
+
+------------------------------------------------------------------
 print("")
 if failures == 0 then
     print(("ALL %d CHECKS PASSED"):format(tests))

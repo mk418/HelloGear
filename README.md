@@ -22,7 +22,7 @@ Set management lives on the character sheet. The gear button under the close but
 - **Minimap button** — click for the quick set menu, right-click to open the panel.
 - **In the menu** — click a set to equip it, shift-click to toggle it, right-click to put back what it replaced. Right-click *Manage sets* to reveal sets marked hidden.
 - **In the panel** — click a row to select, double-click to equip, right-click to toggle.
-- **Editing a set** — hit *Edit slots* and the character sheet becomes the editor. Each slot shows what the selected set does with it. **Left-click** a slot to pick its item from a flyout of everything you're carrying that fits, including *No item* to have the set strip the slot. **Right-click** takes the slot in or out of the set. The four states:
+- **Editing a set** — hit *Edit slots* and the character sheet becomes the editor. Changes save as you make them; *Save* is off while you're editing, because it replaces the whole set with what you're wearing. Each slot shows what the selected set does with it. **Left-click** a slot to pick its item from a flyout of everything you're carrying that fits, including *No item* to have the set strip the slot. **Right-click** takes the slot in or out of the set. The four states:
 
 | | |
 |---|---|

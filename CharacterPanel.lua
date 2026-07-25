@@ -655,7 +655,13 @@ local function BuildPanel()
     end)
     saveButton:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:AddLine("Overwrite the selected set with what you're wearing", 1, 1, 1, true)
+        if ns.Paperdoll:IsEditing() then
+            GameTooltip:AddLine("Slot changes are saved as you make them", 1, 1, 1, true)
+            GameTooltip:AddLine("This button replaces the whole set with what " ..
+                "you're wearing, so it's off while you're editing one.", 0.8, 0.8, 0.8, true)
+        else
+            GameTooltip:AddLine("Overwrite the selected set with what you're wearing", 1, 1, 1, true)
+        end
         GameTooltip:Show()
     end)
     saveButton:SetScript("OnLeave", GameTooltip_Hide)
@@ -838,17 +844,25 @@ function Panel:Refresh()
 
     local editing = ns.Paperdoll:IsEditing()
     editButton:SetText(editing and "|cffffd200Done editing slots|r" or "Edit slots")
-    if selected then
-        equipButton:Enable()
+
+    if selected then equipButton:Enable() else equipButton:Disable() end
+
+    -- Save overwrites the set with what you're wearing, which is precisely
+    -- what you don't want a click away while editing that set slot by slot -
+    -- it would throw away every choice just made. Slot edits are written
+    -- straight into the set as they happen, so there is nothing to save
+    -- while editing anyway.
+    if selected and not editing then
         saveButton:Enable()
+        saveButton:SetText(SAVE or "Save")
     else
-        equipButton:Disable()
         saveButton:Disable()
+        saveButton:SetText(editing and "Saved" or (SAVE or "Save"))
     end
 
     local set = selected and Sets:Get(selected)
     if editing and set then
-        statusText:SetText("L-click a slot: item   R-click: in/out")
+        statusText:SetText("Changes save as you make them")
     elseif set then
         local managed, missing = 0, 0
         for slot, gearID in pairs(set.equip) do
