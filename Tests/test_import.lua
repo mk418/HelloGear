@@ -67,7 +67,7 @@ function ns:Print(fmt, ...)
     print("  | " .. (line:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")))
 end
 
-HelloGearCharDB = { sets = {}, order = {}, bindings = {} }
+HelloGearCharDB = { sets = {}, order = {} }
 ns.Config = {
     GetCharTable = function(_, key)
         HelloGearCharDB[key] = HelloGearCharDB[key] or {}

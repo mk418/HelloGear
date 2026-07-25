@@ -20,7 +20,6 @@ local accountDefaults = {
 local charDefaults = {
     sets = {},
     order = {},
-    bindings = {},
     currentSet = nil,
     itemRackBackup = nil,
 }
@@ -172,9 +171,7 @@ function Config:CreatePanel()
         "  /hg manage - open the gear set panel\n" ..
         "  /hg equip <set> / toggle <set> / save <set>\n" ..
         "  /hg import - import sets from ItemRack\n" ..
-        "  /hg bind <1-6> <set> - assign a set to a key binding\n" ..
-        "  /hg reset - wipe all HelloGear data and reload\n\n" ..
-        "Key bindings: Esc -> Key Bindings -> HelloGear"
+        "  /hg reset - wipe all HelloGear data and reload"
     )
 
     if Settings and Settings.RegisterCanvasLayoutCategory then

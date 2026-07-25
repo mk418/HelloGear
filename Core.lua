@@ -118,33 +118,6 @@ ns:On("PLAYER_LOGIN", function()
 end)
 
 --------------------------------------------------------------------------
--- Key bindings
---
--- Equipping gear is not a protected action in Classic Era, so bindings can
--- call straight into Lua - no secure button indirection needed. Which set
--- each numbered binding equips is assigned with /hg bind.
---------------------------------------------------------------------------
-
-_G.BINDING_HEADER_HELLOGEAR = "HelloGear"
-for i = 1, 6 do
-    _G["BINDING_NAME_HELLOGEAR_SET" .. i] = "Equip assigned set " .. i
-end
-_G.BINDING_NAME_HELLOGEAR_MENU = "Open set menu"
-
-function HelloGear.ToggleMenu()
-    ns.Menu:Toggle(ns.Minimap:GetButton())
-end
-
-function HelloGear.EquipBoundSet(index)
-    local name = ns.Config:GetCharTable("bindings")[index]
-    if not name then
-        ns:Print("no set assigned to binding %d - use /hg bind %d <set>", index, index)
-        return
-    end
-    ns.Equip:EquipSet(name)
-end
-
---------------------------------------------------------------------------
 -- Slash commands
 --------------------------------------------------------------------------
 
@@ -161,7 +134,6 @@ local usage = {
     "  /hg list                - list sets",
     "  /hg manage              - open the gear set panel on the character sheet",
     "  /hg import [force]      - import sets from ItemRack",
-    "  /hg bind <1-6> <set>    - assign a set to a key binding",
     "  /hg dock [pixels]       - report or nudge where the panel docks",
     "  /hg config              - open the options panel",
     "  /hg reset               - wipe all HelloGear data and reload",
@@ -213,17 +185,6 @@ SlashCmdList["HELLOGEAR"] = function(msg)
         ns.Panel:Toggle()
     elseif cmd == "import" then
         ns.Import:Run(rest:lower() == "force")
-    elseif cmd == "bind" then
-        local index, name = rest:match("^(%d)%s+(.+)$")
-        index = tonumber(index)
-        if not index or index < 1 or index > 6 then
-            ns:Print("usage: /hg bind <1-6> <set>")
-        elseif not ns.Sets:Get(name) then
-            ns:Print('no set named "%s"', name)
-        else
-            ns.Config:GetCharTable("bindings")[index] = name
-            ns:Print('binding %d equips "%s" (assign a key in Esc -> Key Bindings -> HelloGear)', index, name)
-        end
     elseif cmd == "dock" then
         local pixels = tonumber(rest)
         if rest:lower() == "art" then

@@ -29,7 +29,6 @@ That single break isn't worth a fork. The interesting part is that the surroundi
 - **Set menu** — minimap button opens a list; click equips, shift-click toggles, right-click restores.
 - **Character-sheet panel** — a button on the character frame opens a docked gear-set panel, and the paperdoll itself becomes the set editor.
 - **Paperdoll slot menus** — every character-sheet slot gets a menu of the alternatives in your bags, with cooldown swirls.
-- **Key bindings** — six assignable set slots plus a menu toggle.
 - **Macro API** — `HelloGear.EquipSet("name")`, and the bare `EquipSet()` global ItemRack-era macros expect.
 
 ## Out of scope
@@ -46,9 +45,8 @@ That single break isn't worth a fork. The interesting part is that the surroundi
 ```
 HelloGear/
 ├── HelloGear.toc
-├── Bindings.xml        -- key bindings (auto-loaded by WoW)
 ├── Core.lua            -- namespace, event dispatcher, API compat shims,
-│                          slash commands, macro API, BINDING_NAME globals
+│                          slash commands, macro API
 ├── Config.lua          -- saved-variables schema, defaults, options panel
 ├── Items.lua           -- slot table, gear IDs, matching, inventory scanning
 ├── Sets.lua            -- set CRUD, save-from-worn, equipped tests

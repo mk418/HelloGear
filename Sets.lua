@@ -109,9 +109,6 @@ function Sets:Delete(name)
     for i, stored in ipairs(order) do
         if stored == name then table.remove(order, i) break end
     end
-    for index, bound in pairs(ns.Config:GetCharTable("bindings")) do
-        if bound == name then ns.Config:GetCharTable("bindings")[index] = nil end
-    end
     if HelloGearCharDB.currentSet == name then HelloGearCharDB.currentSet = nil end
     return true
 end
@@ -126,9 +123,6 @@ function Sets:Rename(oldName, newName)
     self:Store()[newName] = set
     for i, stored in ipairs(self:Order()) do
         if stored == oldName then self:Order()[i] = newName break end
-    end
-    for index, bound in pairs(ns.Config:GetCharTable("bindings")) do
-        if bound == oldName then ns.Config:GetCharTable("bindings")[index] = newName end
     end
     if HelloGearCharDB.currentSet == oldName then HelloGearCharDB.currentSet = newName end
     return true

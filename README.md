@@ -48,13 +48,10 @@ Sets are per character. A set only touches the slots it manages, so a one-slot s
 /hg list                 list sets
 /hg manage               open the gear set panel
 /hg import [force]       import sets from ItemRack
-/hg bind <1-6> <set>     assign a set to a key binding
 /hg dock [pixels]        report or nudge where the panel docks
 /hg config               open the options panel
 /hg reset                wipe all HelloGear data and reload
 ```
-
-Key bindings live under Esc → Key Bindings → HelloGear. Assign sets to the six numbered bindings with `/hg bind`.
 
 ## Macros
 

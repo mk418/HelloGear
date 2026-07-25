@@ -254,7 +254,7 @@ function ns:Print(fmt, ...)
     messages[#messages + 1] = (line:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""))
 end
 
-HelloGearCharDB = { sets = {}, order = {}, bindings = {} }
+HelloGearCharDB = { sets = {}, order = {} }
 ns.Config = {
     GetCharTable = function(_, key)
         HelloGearCharDB[key] = HelloGearCharDB[key] or {}
