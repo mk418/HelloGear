@@ -420,14 +420,18 @@ local CLOSE_TO_EDGE = 3
 -- there isn't one.
 --------------------------------------------------------------------------
 
--- Where the artwork's own visible edges sit within its 384x512 layout, and how
--- wide its border is. The interior fill is placed from these rather than from
--- the panel's bounds: if the panel's own position is a few pixels out, the
--- fill goes with the artwork rather than leaving a band of paperdoll showing
--- between the two.
-local ART_VISIBLE_RIGHT = 359
-local ART_VISIBLE_BOTTOM = 424
-local ART_BORDER = 12
+-- Coordinates within the artwork's own 384x512 layout.
+local ART_VISIBLE_RIGHT = 359   -- where the frame's right border ends
+local ART_BORDER = 11           -- how thick that border is
+
+-- Stretches of border known to be free of decoration. Whole quadrants can't be
+-- used directly: they carry the paperdoll's slot recesses, and the bottom
+-- border carries the hardware the character tabs bolt onto, which ends up
+-- orphaned in the middle of a panel that has no tabs. So each edge is built
+-- from a clean strip instead, and the bottom reuses the top border flipped -
+-- the top is the one horizontal edge with nothing attached to it.
+local CLEAN_TOP_X1, CLEAN_TOP_X2 = 120, 240   -- plain run of the top border
+local CLEAN_RIGHT_Y1, CLEAN_RIGHT_Y2 = 60, 62 -- plain run of the right border
 
 -- Read at runtime rather than hardcoding file IDs, so a client that ships
 -- different artwork still gets its own.
@@ -450,6 +454,91 @@ local function FrameArtPieces()
         end
     end
     return #pieces > 0 and pieces or nil
+end
+
+-- The four quadrants keyed by which corner they are, identified by their own
+-- offsets rather than by order or file ID.
+local function ArtQuadrants()
+    local pieces = FrameArtPieces()
+    if not pieces then return nil end
+    local quads = {}
+    for _, piece in ipairs(pieces) do
+        local key = (piece.y == 0 and "top" or "bottom") .. (piece.x == 0 and "Left" or "Right")
+        quads[key] = piece
+    end
+    return (quads.topLeft and quads.topRight) and quads or nil
+end
+
+-- Frame coordinates -> texture coordinates within one quadrant. `depth` is
+-- measured downward from the artwork's top, the way the layout offsets are.
+local function TexCoords(quad, x1, x2, depth1, depth2)
+    local quadTop = -quad.y
+    return (x1 - quad.x) / quad.width, (x2 - quad.x) / quad.width,
+           (depth1 - quadTop) / quad.height, (depth2 - quadTop) / quad.height
+end
+
+local function Slice(parent, quad, x1, x2, depth1, depth2, flipVertically)
+    local texture = parent:CreateTexture(nil, "BORDER")
+    texture:SetTexture(quad.file)
+    local left, right, top, bottom = TexCoords(quad, x1, x2, depth1, depth2)
+    if flipVertically then top, bottom = bottom, top end
+    texture:SetTexCoord(left, right, top, bottom)
+    return texture
+end
+
+-- Builds the panel's chrome out of clean strips of the character frame's own
+-- artwork. Every piece is anchored to the panel's own edges, so unlike the
+-- whole-quadrant approach this doesn't depend on the panel and the artwork
+-- agreeing about where the frame's corner is.
+local function BuildChrome(target)
+    local quads = ArtQuadrants()
+    if not quads then
+        ns.ApplyChrome(target)
+        return false
+    end
+
+    -- Textures can't be destroyed, so a rebuild hides the old set and makes a
+    -- new one. Only ever a handful, and only when /hg dock border is used.
+    if target.chrome then
+        for _, texture in ipairs(target.chrome) do texture:Hide() end
+    end
+    target.chrome = {}
+    local function keep(texture)
+        target.chrome[#target.chrome + 1] = texture
+        return texture
+    end
+
+    local B = ns.Config:Get("artBorder") or ART_BORDER
+    local R = ART_VISIBLE_RIGHT
+
+    local top = keep(Slice(target, quads.topLeft, CLEAN_TOP_X1, CLEAN_TOP_X2, 0, B))
+    top:SetPoint("TOPLEFT")
+    top:SetPoint("BOTTOMRIGHT", target, "TOPRIGHT", -B, -B)
+
+    local bottom = keep(Slice(target, quads.topLeft, CLEAN_TOP_X1, CLEAN_TOP_X2, 0, B, true))
+    bottom:SetPoint("BOTTOMLEFT")
+    bottom:SetPoint("TOPRIGHT", target, "BOTTOMRIGHT", -B, B)
+
+    local right = keep(Slice(target, quads.topRight, R - B, R, CLEAN_RIGHT_Y1, CLEAN_RIGHT_Y2))
+    right:SetPoint("TOPRIGHT", target, "TOPRIGHT", 0, -B)
+    right:SetPoint("BOTTOMRIGHT", target, "BOTTOMRIGHT", 0, B)
+
+    local topCorner = keep(Slice(target, quads.topRight, R - B, R, 0, B))
+    topCorner:SetSize(B, B)
+    topCorner:SetPoint("TOPRIGHT")
+
+    -- The real bottom-right corner sits next to the tab hardware, so the top
+    -- corner is mirrored down instead.
+    local bottomCorner = keep(Slice(target, quads.topRight, R - B, R, 0, B, true))
+    bottomCorner:SetSize(B, B)
+    bottomCorner:SetPoint("BOTTOMRIGHT")
+
+    local fill = keep(target:CreateTexture(nil, "BACKGROUND"))
+    fill:SetPoint("TOPLEFT", 0, -B)
+    fill:SetPoint("BOTTOMRIGHT", -B, B)
+    fill:SetColorTexture(0.10, 0.09, 0.08, 1)
+
+    return true
 end
 
 -- Right and top of the frame you can actually see. Preferred reference is the
@@ -516,25 +605,6 @@ local function FitToFrame()
 
     -- Slide the borrowed artwork so its right border lands on the panel's
     -- right edge; the rest runs off to the left, behind the character frame.
-    if panel.art then
-        local originX = PANEL_WIDTH - (right - (PaperDollFrame:GetLeft() or CharacterFrame:GetLeft()))
-        for _, piece in ipairs(panel.art) do
-            piece.texture:ClearAllPoints()
-            piece.texture:SetPoint("TOPLEFT", panel, "TOPLEFT", originX + piece.x, piece.y)
-        end
-
-        -- Anchored off the artwork's origin, not the panel's edges. Those two
-        -- are meant to coincide, but when they don't the fill has to follow the
-        -- artwork - otherwise the gap between them shows the paperdoll's slot
-        -- recesses, which is what "more in it than it should" was.
-        if panel.fill then
-            panel.fill:ClearAllPoints()
-            panel.fill:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, -ART_BORDER)
-            panel.fill:SetPoint("BOTTOMRIGHT", panel, "TOPLEFT",
-                originX + ART_VISIBLE_RIGHT - ART_BORDER,
-                -(ART_VISIBLE_BOTTOM - ART_BORDER))
-        end
-    end
 end
 
 -- Prints what the addon can actually see of the character frame. Guessing at
@@ -606,6 +676,12 @@ function Panel:ReportArtwork()
     end
 end
 
+function Panel:SetBorderWidth(pixels)
+    ns.Config:Set("artBorder", pixels ~= ART_BORDER and pixels or nil)
+    BuildChrome(panel)
+    ns:Print("border width set to %d (default %d)", pixels, ART_BORDER)
+end
+
 function Panel:SetDockNudge(pixels)
     ns.Config:Set("dockNudge", pixels ~= 0 and pixels or nil)
     FitToFrame()
@@ -661,33 +737,7 @@ local function BuildPanel()
     panel:EnableMouse(true)
     panel:Hide()
 
-    local pieces = FrameArtPieces()
-    if pieces then
-        panel.art = {}
-        for _, piece in ipairs(pieces) do
-            local texture = panel:CreateTexture(nil, "BORDER")
-            texture:SetTexture(piece.file)
-            texture:SetSize(piece.width, piece.height)
-            piece.texture = texture
-            panel.art[#panel.art + 1] = piece
-        end
-
-        -- Borrowing the artwork borrows the paperdoll's interior with it -
-        -- slot recesses, inset shading, the lot - which is right for the
-        -- border and wrong for the middle of a set list. Everything inside
-        -- the border gets covered over; only the edges and corners show.
-        --
-        -- Left inset is zero: that edge is the character frame's own border,
-        -- drawn by the character frame itself, so the fill runs right up to
-        -- the seam.
-        -- Positioned by FitToFrame, against the artwork rather than the panel.
-        local fill = panel:CreateTexture(nil, "ARTWORK", nil, -8)
-        fill:SetColorTexture(0.10, 0.09, 0.08, 1)
-        panel.fill = fill
-    else
-        -- No artwork to borrow; fall back to the generic chrome.
-        ns.ApplyChrome(panel)
-    end
+    BuildChrome(panel)
 
     local title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
     title:SetPoint("TOPLEFT", CONTENT_LEFT + 2, -18)
