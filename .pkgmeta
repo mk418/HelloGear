@@ -1,0 +1,25 @@
+# BigWigs packager config. Used by the release-builder GitHub Action.
+
+package-as: HelloGear
+
+# Files that should NOT end up in the released zip. The packager already
+# excludes hidden files by default, but listing key items explicitly avoids
+# surprises.
+ignore:
+    - .gitignore
+    - .pkgmeta
+    - .github
+    - .luacheckrc
+    - DESIGN.md
+    - README.md
+    # Headless test harnesses. They stub the WoW API and are run with a plain
+    # lua binary, so they are no use to the client and only bulk out the zip.
+    - Tests
+    # Project image for CurseForge, not something the client needs to download.
+    # Icon.png is deliberately not listed — the TOC's IconTexture points at it,
+    # so it has to ship. LICENSE ships too: the MIT terms ask for the notice to
+    # travel with the copies.
+    - HelloGear.png
+
+# No `manual-changelog` block: the packager auto-generates the changelog from
+# git commit messages between tags.

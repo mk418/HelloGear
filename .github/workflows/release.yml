@@ -1,0 +1,65 @@
+# Release workflow — fires when you push a tag matching v* (e.g. v0.1.0).
+# Builds the addon zip via BigWigs Packager (which reads .pkgmeta), then:
+#   - Uploads to CurseForge if CF_API_KEY is set in repo secrets and the
+#     TOC has an X-Curse-Project-ID header.
+#   - Creates a GitHub Release with the zip(s) attached, using the
+#     auto-provided GITHUB_TOKEN — no setup needed.
+#
+# Without CF_API_KEY in repo secrets the CurseForge upload is silently
+# skipped and the GitHub Release still happens — which looks like success.
+#
+# To publish a new version:
+#   1. Bump `## Version:` in HelloGear.toc to match the tag you're about
+#      to push — the TOC carries a literal version so that dev copies loaded
+#      straight from a checkout show a real number in-game.
+#   2. git commit + push
+#   3. git tag v0.1.0 && git push origin v0.1.0
+#
+# The workflow fires on the tag push, not on the version bump. The changelog
+# is generated from the commits since the previous tag.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+# Required for the packager to create a GitHub Release.
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          # Full history so the packager can generate a changelog from
+          # the commits between this tag and the previous one.
+          fetch-depth: 0
+
+      # The TOC carries a literal version rather than @project-version@, so it
+      # can drift from the tag being released. Catch that here, before the
+      # packager uploads a zip whose in-game version is wrong.
+      - name: Verify tag matches TOC version
+        run: |
+          toc_version=$(sed -n 's/^## Version:[[:space:]]*//p' HelloGear.toc | tr -d '[:space:]')
+          tag_version="${GITHUB_REF_NAME#v}"
+          if [ -z "$toc_version" ]; then
+            echo "::error::No '## Version:' header found in HelloGear.toc"
+            exit 1
+          fi
+          if [ "$toc_version" != "$tag_version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME expects version $tag_version, but HelloGear.toc says $toc_version — bump the TOC to match and retag."
+            exit 1
+          fi
+          echo "TOC version $toc_version matches tag $GITHUB_REF_NAME."
+
+      - name: Package and release
+        uses: BigWigsMods/packager@v2
+        env:
+          CF_API_KEY: ${{ secrets.CF_API_KEY }}
+          GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}
