@@ -228,8 +228,6 @@ SlashCmdList["HELLOGEAR"] = function(msg)
         local pixels = tonumber(rest)
         if rest:lower() == "art" then
             ns.Panel:ReportArtwork()
-        elseif rest:lower() == "chrome" then
-            ns.Panel:ReportChrome()
         elseif pixels then
             ns.Panel:SetDockNudge(pixels)
         else

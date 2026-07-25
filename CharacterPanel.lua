@@ -8,9 +8,10 @@ local Sets = ns.Sets
 local PANEL_WIDTH = 214
 local PANEL_HEIGHT = 400   -- provisional; FitToFrame anchors top and bottom
 local ROW_HEIGHT = 36
-local CONTENT_LEFT = 16    -- clear of the border
-local CONTENT_RIGHT = -34  -- border, plus room for the scrollbar inside it
-local ROW_WIDTH = PANEL_WIDTH + CONTENT_RIGHT - CONTENT_LEFT
+local CONTENT_LEFT = ns.CHROME_INSET + 16    -- clear of the border
+local CONTENT_RIGHT = -(ns.CHROME_INSET + 34) -- border, plus the scrollbar
+local FRAME_WIDTH = PANEL_WIDTH + ns.CHROME_INSET * 2
+local ROW_WIDTH = FRAME_WIDTH + CONTENT_RIGHT - CONTENT_LEFT
 local BUTTON_SIZE = 26
 
 
@@ -426,56 +427,22 @@ local CLOSE_TO_EDGE = -8
 -- every side, and every one of these was originally guessed wrong.
 local ART_TOP_PADDING = 5       -- transparent rows above the artwork's top
 
--- Both the character frame and the social window edge themselves the same
--- way: a bright highlight on the very outside, a dark line immediately
--- inside it, then a mid tone that is - measured - the same colour as the
--- header band the panel is filled with.
+-- The panel wears the same chrome as the addon's other panels. Reproducing
+-- the character frame's own border was tried at length - whole quadrants of
+-- its artwork, then clean strips sliced out of it - and each attempt brought
+-- something worse along with it: the paperdoll's slot recesses, the hardware
+-- its tabs bolt onto, or a sample from the wrong half of the texture file.
+-- This is the version that looked best, so it is the version that stays.
 --
--- Drawn rather than sliced out of the frame's artwork. Slicing kept sampling
--- the wrong part of the texture, and the profile is three flat colours; the
--- reproduction is exact and there is nothing left to drift. Measured off
--- screenshots at RGB 141 and 20 against the fill's 59, then corrected for the
--- client rendering a colour texture lighter than its nominal value.
-local EDGE_LIGHT = { 0.487, 0.482, 0.463 }
-local EDGE_DARK  = { 0.047, 0.047, 0.043 }
+-- The fill keeps the character frame's header band colour, measured at RGB
+-- 58,53,49 - the input is lower than that fraction because the client renders
+-- a colour texture lighter than its nominal value.
+local FILL_COLOUR = { 0.178, 0.163, 0.151, 1 }
 
-local function BuildChrome(target)
-    if target.chrome then
-        for _, texture in ipairs(target.chrome) do texture:Hide() end
-    end
-    target.chrome = {}
-
-    local function Line(colour)
-        local texture = target:CreateTexture(nil, "BORDER")
-        texture:SetColorTexture(colour[1], colour[2], colour[3], 1)
-        target.chrome[#target.chrome + 1] = texture
-        return texture
-    end
-
-    local fill = target:CreateTexture(nil, "BACKGROUND")
-    fill:SetAllPoints(target)
-    fill:SetColorTexture(0.178, 0.163, 0.151, 1)
-    target.chrome[#target.chrome + 1] = fill
-
-    -- No left edge: that side is the character frame's own border, which the
-    -- panel is tucked behind.
-    local edges = {
-        { EDGE_LIGHT, "TOPLEFT", 0, 0, "TOPRIGHT", 0, 0, "height" },
-        { EDGE_DARK, "TOPLEFT", 0, -1, "TOPRIGHT", 0, -1, "height" },
-        { EDGE_LIGHT, "BOTTOMLEFT", 0, 0, "BOTTOMRIGHT", 0, 0, "height" },
-        { EDGE_DARK, "BOTTOMLEFT", 0, 1, "BOTTOMRIGHT", 0, 1, "height" },
-        { EDGE_LIGHT, "TOPRIGHT", 0, 0, "BOTTOMRIGHT", 0, 0, "width" },
-        { EDGE_DARK, "TOPRIGHT", -1, 0, "BOTTOMRIGHT", -1, 0, "width" },
-    }
-    for _, edge in ipairs(edges) do
-        local line = Line(edge[1])
-        line:SetPoint(edge[2], target, edge[2], edge[3], edge[4])
-        line:SetPoint(edge[5], target, edge[5], edge[6], edge[7])
-        if edge[8] == "height" then line:SetHeight(1) else line:SetWidth(1) end
-    end
-
-    return true
-end
+-- The border draws this far inside the frame's bounds, so the panel is
+-- inflated by it on every side and its drawn edges land where the artwork's
+-- are. PANEL_WIDTH stays the width you actually see.
+local PAD = ns.CHROME_INSET
 
 -- Right and top of the frame you can actually see. Preferred reference is the
 -- close button, which Blizzard pins to the artwork's top-right corner; the
@@ -526,7 +493,7 @@ local function FitToFrame()
     -- they aren't symmetric within the artwork (left margin 21, right nearer
     -- 9), so mirroring one onto the other overshoots by about ten pixels.
     local right, top = VisibleCorner()
-    local x = (right - CharacterFrame:GetLeft()) + nudge
+    local x = (right - CharacterFrame:GetLeft()) - PAD + nudge
 
     local tab1 = _G.CharacterFrameTab1
     local bottom = Panel.ComputeArtBottom(CharacterFrame:GetBottom(), tab1 and tab1:GetTop())
@@ -536,8 +503,9 @@ local function FitToFrame()
     -- The borrowed chrome brings its own transparent padding, exactly as the
     -- character frame's does, so nothing here is inflated to compensate.
     panel:ClearAllPoints()
-    panel:SetPoint("TOPLEFT", CharacterFrame, "TOPLEFT", x, top - CharacterFrame:GetTop())
-    panel:SetPoint("BOTTOMLEFT", CharacterFrame, "BOTTOMLEFT", x, bottom)
+    panel:SetPoint("TOPLEFT", CharacterFrame, "TOPLEFT", x,
+        (top - CharacterFrame:GetTop()) + PAD)
+    panel:SetPoint("BOTTOMLEFT", CharacterFrame, "BOTTOMLEFT", x, bottom - PAD)
 
     -- Slide the borrowed artwork so its right border lands on the panel's
     -- right edge; the rest runs off to the left, behind the character frame.
@@ -614,25 +582,6 @@ function Panel:ReportArtwork()
     end
 end
 
--- Whether the sliced border actually made it onto the screen, and where. The
--- pieces have been silently absent more than once, and "no border visible" and
--- "border drawn somewhere unhelpful" look identical from a screenshot.
-function Panel:ReportChrome()
-    if not panel.chrome then
-        ns:Print("|cffff8080no sliced chrome|r - the generic fallback is in use")
-        return
-    end
-    ns:Print("panel: left %.1f right %.1f top %.1f bottom %.1f",
-        panel:GetLeft() or -1, panel:GetRight() or -1,
-        panel:GetTop() or -1, panel:GetBottom() or -1)
-    for index, texture in ipairs(panel.chrome) do
-        local l, r, t, b = texture:GetLeft(), texture:GetRight(), texture:GetTop(), texture:GetBottom()
-        ns:Print("  %d: %s  %s  l%.0f r%.0f t%.0f b%.0f",
-            index, texture:IsShown() and "shown" or "|cffff8080hidden|r",
-            tostring(texture:GetTexture()), l or -1, r or -1, t or -1, b or -1)
-    end
-end
-
 function Panel:SetDockNudge(pixels)
     ns.Config:Set("dockNudge", pixels ~= 0 and pixels or nil)
     FitToFrame()
@@ -675,7 +624,7 @@ local function BuildPanel()
     end)
 
     panel = CreateFrame("Frame", "HelloGearCharacterPanel", CharacterFrame, "BackdropTemplate")
-    panel:SetSize(PANEL_WIDTH, PANEL_HEIGHT)
+    panel:SetSize(FRAME_WIDTH, PANEL_HEIGHT)
     -- Provisional; FitToFrame docks it flush against the artwork once the
     -- character frame has been laid out.
     panel:SetPoint("TOPLEFT", CharacterFrame, "TOPRIGHT", -45, -12)
@@ -688,7 +637,7 @@ local function BuildPanel()
     panel:EnableMouse(true)
     panel:Hide()
 
-    BuildChrome(panel)
+    ns.ApplyChrome(panel, FILL_COLOUR)
 
     local title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
     title:SetPoint("TOPLEFT", CONTENT_LEFT + 2, -18)

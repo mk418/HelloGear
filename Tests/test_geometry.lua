@@ -14,7 +14,7 @@ local ADDON = (arg[0]:match("^(.*)/Tests/[^/]+$")) or "."
 -- geometry function is exercised, so the frame-building half never runs.
 --------------------------------------------------------------------------
 
-local ns = { EMPTY = 0, SLOTS = {}, API = {} }
+local ns = { EMPTY = 0, SLOTS = {}, API = {}, CHROME_INSET = 11 }
 ns.Items = {}
 ns.Sets = {}
 ns.Config = { Get = function() return false end, Set = function() end }

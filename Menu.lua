@@ -56,15 +56,16 @@ end
 -- panel's border still started at 366.
 ns.CHROME_INSET = 11
 
-local function ApplyChrome(target)
+local function ApplyChrome(target, colour)
     if not borderTemplate then
         target:SetBackdrop(ns.BACKDROP)
         return
     end
+    colour = colour or { 0.04, 0.04, 0.05, 0.9 }
     local bg = target:CreateTexture(nil, "BACKGROUND")
     bg:SetPoint("TOPLEFT", 4, -4)
     bg:SetPoint("BOTTOMRIGHT", -4, 4)
-    bg:SetColorTexture(0.04, 0.04, 0.05, 0.9)
+    bg:SetColorTexture(colour[1], colour[2], colour[3], colour[4] or 1)
     target.bg = bg
 
     local border = CreateFrame("Frame", nil, target, borderTemplate)
