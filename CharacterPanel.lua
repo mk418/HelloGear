@@ -8,7 +8,6 @@ local Sets = ns.Sets
 local PANEL_WIDTH = 214
 local PANEL_HEIGHT = 400   -- provisional; FitToFrame anchors top and bottom
 local ROW_HEIGHT = 36
-local INTERIOR_INSET = 11  -- width of the borrowed border art
 local CONTENT_LEFT = 16    -- clear of the border
 local CONTENT_RIGHT = -34  -- border, plus room for the scrollbar inside it
 local ROW_WIDTH = PANEL_WIDTH + CONTENT_RIGHT - CONTENT_LEFT
@@ -421,6 +420,15 @@ local CLOSE_TO_EDGE = 3
 -- there isn't one.
 --------------------------------------------------------------------------
 
+-- Where the artwork's own visible edges sit within its 384x512 layout, and how
+-- wide its border is. The interior fill is placed from these rather than from
+-- the panel's bounds: if the panel's own position is a few pixels out, the
+-- fill goes with the artwork rather than leaving a band of paperdoll showing
+-- between the two.
+local ART_VISIBLE_RIGHT = 359
+local ART_VISIBLE_BOTTOM = 424
+local ART_BORDER = 12
+
 -- Read at runtime rather than hardcoding file IDs, so a client that ships
 -- different artwork still gets its own.
 local function FrameArtPieces()
@@ -514,6 +522,18 @@ local function FitToFrame()
             piece.texture:ClearAllPoints()
             piece.texture:SetPoint("TOPLEFT", panel, "TOPLEFT", originX + piece.x, piece.y)
         end
+
+        -- Anchored off the artwork's origin, not the panel's edges. Those two
+        -- are meant to coincide, but when they don't the fill has to follow the
+        -- artwork - otherwise the gap between them shows the paperdoll's slot
+        -- recesses, which is what "more in it than it should" was.
+        if panel.fill then
+            panel.fill:ClearAllPoints()
+            panel.fill:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, -ART_BORDER)
+            panel.fill:SetPoint("BOTTOMRIGHT", panel, "TOPLEFT",
+                originX + ART_VISIBLE_RIGHT - ART_BORDER,
+                -(ART_VISIBLE_BOTTOM - ART_BORDER))
+        end
     end
 end
 
@@ -544,6 +564,12 @@ function Panel:ReportGeometry()
         ns:Print("derived artwork inset: %.1f (fallback %d)", ArtInset() or 0, DEFAULT_ART_INSET)
     else
         ns:Print("could not measure the slot columns")
+    end
+    if PaperDollFrame then
+        local cornerX = (VisibleCorner())
+        ns:Print("paperdoll: left %.1f  top %.1f   artwork origin x %.1f",
+            PaperDollFrame:GetLeft() or -1, PaperDollFrame:GetTop() or -1,
+            PANEL_WIDTH - (cornerX - (PaperDollFrame:GetLeft() or 0)))
     end
     local tab1 = _G.CharacterFrameTab1
     ns:Print("frame bottom %.1f  tab top %.1f  derived artwork bottom offset %.1f",
@@ -654,9 +680,8 @@ local function BuildPanel()
         -- Left inset is zero: that edge is the character frame's own border,
         -- drawn by the character frame itself, so the fill runs right up to
         -- the seam.
+        -- Positioned by FitToFrame, against the artwork rather than the panel.
         local fill = panel:CreateTexture(nil, "ARTWORK", nil, -8)
-        fill:SetPoint("TOPLEFT", 0, -INTERIOR_INSET)
-        fill:SetPoint("BOTTOMRIGHT", -INTERIOR_INSET, INTERIOR_INSET)
         fill:SetColorTexture(0.10, 0.09, 0.08, 1)
         panel.fill = fill
     else
