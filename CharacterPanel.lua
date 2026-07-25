@@ -166,15 +166,18 @@ local function BuildOptions()
         Panel:Refresh()
     end)
 
-    options.resetIcon = CreateFrame("Button", nil, options, "UIPanelButtonTemplate")
-    options.resetIcon:SetSize(206, 22)
-    options.resetIcon:SetPoint("TOPLEFT", options.hidden, "BOTTOMLEFT", 2, -4)
-    options.resetIcon:SetText("Reset icon to a set item")
-    options.resetIcon:SetScript("OnClick", function()
+    options.chooseIcon = CreateFrame("Button", nil, options, "UIPanelButtonTemplate")
+    options.chooseIcon:SetSize(206, 22)
+    options.chooseIcon:SetPoint("TOPLEFT", options.hidden, "BOTTOMLEFT", 2, -4)
+    options.chooseIcon:SetText("Choose icon...")
+    options.chooseIcon:SetScript("OnClick", function(self)
         local set = options.setName and Sets:Get(options.setName)
         if not set then return end
-        set.icon = Sets:SuggestIcon(set)
-        Panel:Refresh()
+        ns.IconPicker:Open(set, self, function(texture)
+            set.icon = texture
+            ns.Menu:Refresh()
+            Panel:Refresh()
+        end)
     end)
 
     options:SetScript("OnShow", function()
@@ -184,7 +187,12 @@ local function BuildOptions()
             options.closer:SetFrameStrata("DIALOG")
             options.closer:SetFrameLevel(1)
             options.closer:EnableMouse(true)
-            options.closer:SetScript("OnMouseDown", function() options:Hide() end)
+            options.closer:SetScript("OnMouseDown", function()
+                -- The icon picker opens on top of this and has a catcher of
+                -- its own; closing underneath it would take both down.
+                if ns.IconPicker:IsShown() then return end
+                options:Hide()
+            end)
         end
         options.closer:Show()
     end)
