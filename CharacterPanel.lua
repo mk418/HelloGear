@@ -683,17 +683,17 @@ local function BuildPanel()
     saveButton:SetScript("OnClick", function()
         if not selected then return end
         Sets:SaveFromWorn(selected, true)
-        ns:Print('"%s" now matches what you\'re wearing', selected)
+        ns:Print('"%s" included slots now match what you\'re wearing', selected)
         Panel:Refresh()
     end)
     saveButton:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         if ns.Paperdoll:IsEditing() then
             GameTooltip:AddLine("Slot changes are saved as you make them", 1, 1, 1, true)
-            GameTooltip:AddLine("This button replaces the whole set with what " ..
+            GameTooltip:AddLine("This button replaces the included slots with what " ..
                 "you're wearing, so it's off while you're editing one.", 0.8, 0.8, 0.8, true)
         else
-            GameTooltip:AddLine("Overwrite the selected set with what you're wearing", 1, 1, 1, true)
+            GameTooltip:AddLine("Update the selected set's included slots from what you're wearing", 1, 1, 1, true)
         end
         GameTooltip:Show()
     end)
@@ -959,11 +959,10 @@ function Panel:Refresh()
         bankPutButton:Disable()
     end
 
-    -- Save overwrites the set with what you're wearing, which is precisely
-    -- what you don't want a click away while editing that set slot by slot -
-    -- it would throw away every choice just made. Slot edits are written
-    -- straight into the set as they happen, so there is nothing to save
-    -- while editing anyway.
+    -- Save overwrites the set's included slots with what you're wearing,
+    -- which would throw away choices just made in the slot editor. Slot edits
+    -- are written straight into the set as they happen, so there is nothing
+    -- to save while editing anyway.
     if selected and not editing then
         saveButton:Enable()
         saveButton:SetText(SAVE or "Save")

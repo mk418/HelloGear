@@ -741,20 +741,34 @@ scenario("item cooldowns are read from the item's location", function()
 end)
 
 ------------------------------------------------------------------
-scenario("saving worn gear replaces a set rather than merging into it", function()
-    -- This is what the panel's Save button does, and it's why Save is turned
-    -- off while a set is being edited slot by slot: it replaces every slot
-    -- from the character, so a click would discard everything just chosen.
-    local helm, chest, picked = G(100), G(101), G(111)
+scenario("saving worn gear preserves an existing set's managed slots", function()
+    local helm, chest, picked, shield = G(100), G(101), G(111), G(106)
     world.worn[1] = helm
     world.worn[5] = chest
-    local set = Sets:Create("Edit", { equip = { [1] = picked, [17] = ns.EMPTY } })
+    world.worn[17] = shield
+    local set = Sets:Create("Edit", {
+        equip = { [1] = picked, [9] = G(109), [17] = ns.EMPTY },
+    })
 
     Sets:SaveFromWorn("Edit", true)
 
-    check(set.equip[1] == helm, "a hand-picked slot is overwritten by what's worn")
-    check(set.equip[5] == chest, "slots the set didn't manage get added")
-    check(set.equip[17] == nil, "a deliberate empty is dropped, not preserved")
+    check(set.equip[1] == helm, "a managed slot is updated from what's worn")
+    check(set.equip[5] == nil, "an excluded slot remains excluded")
+    check(set.equip[9] == ns.EMPTY, "a managed bare slot becomes deliberately empty")
+    check(set.equip[17] == shield, "a managed empty slot adopts the worn item")
+end)
+
+------------------------------------------------------------------
+scenario("saving worn gear as a new set captures every worn slot", function()
+    local helm, chest = G(100), G(101)
+    world.worn[1] = helm
+    world.worn[5] = chest
+
+    local set = Sets:SaveFromWorn("New")
+
+    check(set.equip[1] == helm, "new set captures the worn helm")
+    check(set.equip[5] == chest, "new set captures the worn chest")
+    check(set.equip[17] == nil, "new set leaves a bare slot ignored")
 end)
 
 ------------------------------------------------------------------

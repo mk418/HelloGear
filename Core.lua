@@ -1,6 +1,6 @@
 local ADDON_NAME, ns = ...
 ns.ADDON_NAME = ADDON_NAME
-ns.VERSION = "0.1.0"
+ns.VERSION = "0.1.1"
 
 -- Sentinel stored in a set's equip table to mean "this slot must be empty",
 -- as opposed to nil which means "leave whatever is in this slot alone".

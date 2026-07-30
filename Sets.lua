@@ -128,16 +128,23 @@ function Sets:Rename(oldName, newName)
     return true
 end
 
--- Captures everything currently worn. Empty slots are left out rather than
--- recorded as ns.EMPTY: a set built from your gear shouldn't start stripping
--- your shirt off just because you weren't wearing one.
+-- A new set captures everything currently worn, leaving bare slots ignored.
+-- Overwriting an existing set keeps its managed-slot mask: included slots are
+-- updated from what is worn (or recorded as deliberately empty), while slots
+-- the player excluded remain untouched.
 function Sets:SaveFromWorn(name, keepIcon)
-    local existing = self:Get(self:Resolve(name) or "")
-    local set = self:Create(self:Resolve(name) or name, existing)
-    wipe(set.equip)
-    for _, def in ipairs(ns.SLOTS) do
-        local worn = Items.GetWorn(def.id)
-        if worn then set.equip[def.id] = worn end
+    local resolved = self:Resolve(name)
+    local existing = self:Get(resolved or "")
+    local set = self:Create(resolved or name, existing)
+    if existing then
+        for slot in pairs(set.equip) do
+            set.equip[slot] = Items.GetWorn(slot) or ns.EMPTY
+        end
+    else
+        for _, def in ipairs(ns.SLOTS) do
+            local worn = Items.GetWorn(def.id)
+            if worn then set.equip[def.id] = worn end
+        end
     end
     set.restore = nil
     set.restoreSet = nil
