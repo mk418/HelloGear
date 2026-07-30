@@ -102,7 +102,7 @@ end
 
 local function BuildOptions()
     options = ns.CreatePanel("HelloGearSetOptions")
-    options:SetSize(252, 182)
+    options:SetSize(252, 214)
     options:SetClampedToScreen(true)
 
     options.title = options:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
@@ -179,10 +179,26 @@ local function BuildOptions()
         -- on top of the thing that opened it.
         ns.IconPicker:Open(set, options, function(texture)
             set.icon = texture
+            Sets:NotifyChanged(set)
             ns.Menu:Refresh()
             Panel:Refresh()
         end)
     end)
+
+    options.macro = CreateFrame("Button", nil, options, "UIPanelButtonTemplate")
+    options.macro:SetSize(206, 22)
+    options.macro:SetPoint("TOPLEFT", options.chooseIcon, "BOTTOMLEFT", 0, -4)
+    options.macro:SetText("Put action-bar macro on cursor")
+    options.macro:SetScript("OnClick", function()
+        if options.setName then ns.Equip:CreateSetMacro(options.setName) end
+    end)
+    options.macro:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:AddLine("HelloGear action-bar macro", 1, 1, 1)
+        GameTooltip:AddLine("Drop it on an action bar. Main-hand, off-hand and ranged weapons swap immediately in combat; other slots finish when combat ends.", 0.8, 0.8, 0.8, true)
+        GameTooltip:Show()
+    end)
+    options.macro:SetScript("OnLeave", GameTooltip_Hide)
 
     options:SetScript("OnShow", function()
         if not options.closer then

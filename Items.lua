@@ -147,6 +147,16 @@ function Items.ToItemString(gearID)
     return string.format("item:%d:%d:0:0:0:0:%d:%d:%d", itemID, enchant, suffix, unique, UnitLevel("player") or 0)
 end
 
+-- The native /equipslot command is the one path the client permits for
+-- weapon changes in combat. It accepts an item string, and does not need the
+-- volatile player-level field that tooltip lookups do. Keeping this compact
+-- matters because a WoW macro has room for only 255 characters.
+function Items.ToEquipString(gearID)
+    local itemID, enchant, suffix, unique = Items.Parse(gearID)
+    if not itemID then return nil end
+    return string.format("item:%d:%d:0:0:0:0:%d:%d", itemID, enchant, suffix, unique)
+end
+
 -- nil = different items. 3 = the same physical item. 2 = same item with the
 -- same enchant. 1 = same item, different enchant.
 function Items.MatchScore(wanted, have)

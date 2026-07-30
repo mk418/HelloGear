@@ -31,7 +31,7 @@ That single break isn't worth a fork. The interesting part is that the surroundi
 - **Set menu** — minimap button opens a list; click equips, shift-click toggles, right-click restores.
 - **Character-sheet panel** — a button on the character frame opens a docked gear-set panel, and the paperdoll itself becomes the set editor.
 - **Paperdoll slot menus** — every character-sheet slot gets a menu of the alternatives in your bags, with cooldown swirls.
-- **Macro API** — `HelloGear.EquipSet("name")`, and the bare `EquipSet()` global ItemRack-era macros expect.
+- **Macros** — managed action-bar macros for in-combat weapon swaps, plus `HelloGear.EquipSet("name")` and the bare `EquipSet()` global ItemRack-era macros expect.
 
 ## Out of scope
 
@@ -131,7 +131,18 @@ Rings and trinkets that are simply in each other's slots are handled by a direct
 
 ### In combat
 
-Era permits gear swaps in combat, so the engine doesn't gate on it — no combat queue, no deferred swaps. `PLAYER_REGEN_ENABLED` is registered anyway, so a job that stalls mid-fight resumes when combat drops.
+Era permits weapon swaps in combat, but `PickupInventoryItem` is restricted
+there even when it was reached from an addon click or `/script` macro. The
+native `/equipslot` macro command is the exception. HelloGear therefore pauses
+ordinary cursor jobs in combat and provides a managed character macro for each
+set that asks for one. Its `/equipslot` lines change main hand, off hand and
+ranged immediately; its Lua callback snapshots restore state and queues the
+same normal job to finish armor (or deliberate empty slots) on
+`PLAYER_REGEN_ENABLED`.
+
+The macro stores a stable per-character set ID rather than its name, so renames
+do not break action bars. Set edits rewrite the macro outside combat; edits
+made during combat are synchronized when combat ends.
 
 ---
 

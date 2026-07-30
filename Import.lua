@@ -135,6 +135,7 @@ function Import:Run(overwrite)
                 if existing then
                     -- Keep the slot the player assigned it in the menu order.
                     set.hidden = existing.hidden
+                    set.macroID = existing.macroID
                 end
                 Sets:Create(name, set)
                 imported = imported + 1

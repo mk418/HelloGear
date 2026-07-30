@@ -23,6 +23,7 @@ Set management lives on the character sheet. The gear button under the close but
 - **In the menu** — click a set to equip it, shift-click to toggle it, right-click to put back what it replaced. Right-click *Manage sets* to reveal sets marked hidden.
 - **In the panel** — click a row to select, double-click to equip, right-click to toggle. A set shown in **red** has gear you aren't carrying; its tooltip marks which pieces, and says *(bank)* for anything the bank is holding.
 - **Set options** — the gear button on a row opens rename, the helm and cloak toggles, and *Choose icon…*, which offers the set's own gear first, then the client's full icon list, and a search box. Search covers every icon, by name. Classic Era reports its icons as bare file IDs with no names, so the addon ships a generated lookup for them; separators don't matter, so *shadow bolt* and *spell_shadow_shadowbolt* find each other.
+- **Action-bar macros** — *Put action-bar macro on cursor* in a set's options creates a character macro ready to drop on your bar. Main-hand, off-hand and ranged weapons (including shields) switch immediately in combat; every other managed slot is queued and finishes when combat ends. HelloGear keeps the macro current when you edit or re-save the set.
 - **Editing a set** — hit *Edit slots* and the character sheet becomes the editor. Changes save as you make them; *Save* is off while you're editing, because it replaces the set's included slots with what you're wearing. Excluded slots stay excluded. Each slot shows what the selected set does with it. **Left-click** a slot to pick its item from a flyout of everything you're carrying that fits, including *No item* to have the set strip the slot. **Right-click** takes the slot in or out of the set. The four states:
 
 | | |
@@ -44,6 +45,7 @@ Sets are per character. A set only touches the slots it manages, so a one-slot s
 /hg toggle <set>         equip a set, or put back what it replaced
 /hg unequip <set>        put back what the set replaced
 /hg save <set>           save currently worn gear as <set>
+/hg macro <set>          put an in-combat weapon macro on the cursor
 /hg undress              take everything off, into your bags
 /hg delete <set>         delete a set
 /hg list                 list sets
@@ -58,10 +60,23 @@ Sets are per character. A set only touches the slots it manages, so a one-slot s
 
 ## Macros
 
+For a macro that can change weapons in combat, run `/hg macro <set>` or use
+*Put action-bar macro on cursor* in that set's options, then drop the macro on
+an action bar. The macro is per character and follows the set when it is
+renamed or edited. A deliberately empty weapon slot cannot be cleared by a
+macro; it is cleared with the rest of the queued work after combat (equipping
+a two-handed weapon still clears the off hand normally).
+
+The Lua API remains useful for composing out-of-combat macros:
+
 ```lua
 /script HelloGear.EquipSet("Tank")
 /script HelloGear.ToggleSet("Fire resistance")
 ```
+
+During combat those Lua calls safely queue the set, but the client does not
+allow addon Lua to perform the immediate weapon move. Use the managed
+action-bar macro when the weapons must change during the fight.
 
 ItemRack's bare globals — `EquipSet`, `UnequipSet`, `ToggleSet`, `IsSetEquipped` — are also defined, so existing macros keep working. HelloGear only claims a name nothing else has taken, and you can turn this off in the options.
 

@@ -22,6 +22,7 @@ local charDefaults = {
     order = {},
     currentSet = nil,
     itemRackBackup = nil,
+    nextMacroID = 1,
 }
 
 local function applyDefaults(target, defaults)
@@ -170,6 +171,7 @@ function Config:CreatePanel()
         "  /hg - open the set menu\n" ..
         "  /hg manage - open the gear set panel\n" ..
         "  /hg equip <set> / toggle <set> / save <set>\n" ..
+        "  /hg macro <set> - create an action-bar macro\n" ..
         "  /hg import - import sets from ItemRack\n" ..
         "  /hg reset - wipe all HelloGear data and reload"
     )

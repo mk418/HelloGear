@@ -1,6 +1,6 @@
 local ADDON_NAME, ns = ...
 ns.ADDON_NAME = ADDON_NAME
-ns.VERSION = "0.1.1"
+ns.VERSION = "0.1.2"
 
 -- Sentinel stored in a set's equip table to mean "this slot must be empty",
 -- as opposed to nil which means "leave whatever is in this slot alone".
@@ -109,6 +109,10 @@ function HelloGear.UnequipSet(name)   return ns.Equip:UnequipSet(name) end
 function HelloGear.ToggleSet(name)    return ns.Equip:ToggleSet(name) end
 function HelloGear.IsSetEquipped(name, exact) return ns.Sets:IsEquipped(name, exact) end
 function HelloGear.GetSetNames()      return ns.Sets:Names() end
+-- Used by HelloGear-managed action-bar macros. The stable numeric ID keeps a
+-- macro working when its set is renamed.
+function HelloGear.EquipMacro(macroID) return ns.Equip:EquipMacro(macroID) end
+function HelloGear.CreateSetMacro(name) return ns.Equip:CreateSetMacro(name) end
 
 ns:On("PLAYER_LOGIN", function()
     if not ns.Config:Get("legacyGlobals") then return end
@@ -132,6 +136,7 @@ local usage = {
     "  /hg unequip <set>       - put back what the set replaced",
     "  /hg undress             - take everything off, into your bags",
     "  /hg save <set>          - save currently worn gear as <set>",
+    "  /hg macro <set>         - put an in-combat weapon macro on the cursor",
     "  /hg delete <set>        - delete a set",
     "  /hg list                - list sets",
     "  /hg manage              - open the gear set panel on the character sheet",
@@ -169,6 +174,8 @@ SlashCmdList["HELLOGEAR"] = function(msg)
             ns:Print('saved worn gear as "%s"', rest)
             ns.Panel:Refresh()
         end
+    elseif cmd == "macro" then
+        ns.Equip:CreateSetMacro(rest)
     elseif cmd == "delete" then
         if ns.Sets:Delete(rest) then
             ns:Print('deleted "%s"', rest)

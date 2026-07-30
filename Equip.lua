@@ -11,6 +11,12 @@ local INVSLOT_AMMO_ID   = 0
 local INVSLOT_RANGED_ID = 18
 local INVSLOT_MAINHAND  = 16
 local INVSLOT_OFFHAND   = 17
+local COMBAT_EQUIP_SLOTS = { INVSLOT_MAINHAND, INVSLOT_OFFHAND, INVSLOT_RANGED_ID }
+
+local MAX_MACRO_LENGTH = 255
+local FALLBACK_ACCOUNT_MACROS = 120
+local FALLBACK_CHARACTER_MACROS = 18
+local MACRO_RUN_PREFIX = "/run HelloGear.EquipMacro("
 
 -- A swap is not instantaneous: the client locks both endpoints and completes
 -- the move a moment later. So we run in passes - do everything we can, wait
@@ -20,6 +26,11 @@ local MAX_PASSES = 15
 local TIMEOUT = 8
 
 Equip.job = nil
+Equip.queuedJob = nil
+
+local function InCombat()
+    return InCombatLockdown and InCombatLockdown()
+end
 
 --------------------------------------------------------------------------
 -- Cursor-level moves
@@ -287,6 +298,17 @@ local function Step()
     local job = Equip.job
     if not job then return end
 
+    -- Cursor pickup APIs are blocked in combat, including for weapons. Native
+    -- /equipslot macro commands are the sanctioned exception; ordinary jobs
+    -- pause here and resume without spending their timeout budget.
+    if InCombat() then
+        job.pausedAt = job.pausedAt or GetTime()
+        return
+    elseif job.pausedAt then
+        job.startedAt = job.startedAt + (GetTime() - job.pausedAt)
+        job.pausedAt = nil
+    end
+
     if GetTime() - job.startedAt > TIMEOUT or job.passes >= MAX_PASSES then
         local _, count = BuildPlan(job.equip)
         FinishJob(job, count > 0 and count or nil)
@@ -336,6 +358,7 @@ function Equip:Init()
             Step()
         end)
     end)
+    self:SyncAllSetMacros()
 end
 
 -- job.equip is consumed and mutated (found items get removed as they land),
@@ -345,6 +368,26 @@ function Equip:Start(job)
         ns:Print("can't swap gear while dead")
         return false
     end
+
+    if InCombat() then
+        if self.job then
+            self.job = nil
+            self:SetWatching(false)
+        end
+        -- Latest request wins here for the same reason it does for an active
+        -- job. The generated macro has native /equipslot lines after its /run
+        -- callback, so its weapons still change now; this job finishes every
+        -- remaining slot as soon as combat ends.
+        self.queuedJob = job
+        if job.fromMacro then
+            ns:Print('queued the rest of "%s" until combat ends', job.name or "the set")
+        else
+            ns:Print('queued "%s" until combat ends', job.name or "gear swap")
+        end
+        return true
+    end
+
+    self.queuedJob = nil
     if self.job then
         -- Latest request wins. Queueing set swaps just means watching your
         -- character cycle through gear you didn't ask for.
@@ -363,16 +406,26 @@ function Equip:Start(job)
     return true
 end
 
+function Equip:ResumeQueued()
+    if InCombat() or not self.queuedJob then return end
+    local job = self.queuedJob
+    self.queuedJob = nil
+    self:Start(job)
+end
+
 --------------------------------------------------------------------------
 -- Public entry points
 --------------------------------------------------------------------------
 
-function Equip:EquipSet(name)
+-- Resolve a set, capture its undo snapshot, and build a private job. Macro
+-- execution needs this preparation before the native /equipslot lines run;
+-- the ordinary API starts the exact same job immediately.
+local function PrepareSetJob(name)
     local resolved = Sets:Resolve(name)
     local set = resolved and Sets:Get(resolved)
     if not set then
         ns:Print('no set named "%s"', tostring(name))
-        return false
+        return nil, false
     end
 
     local plan, count = BuildPlan(set.equip)
@@ -381,7 +434,7 @@ function Equip:EquipSet(name)
         Announce('"%s" already equipped', resolved)
         ns.Menu:Refresh()
         ns.Panel:Refresh()
-        return true
+        return nil, true
     end
 
     -- Snapshot only the slots this set actually changes, so toggling a
@@ -395,13 +448,19 @@ function Equip:EquipSet(name)
     local equip = {}
     for slot, gearID in pairs(set.equip) do equip[slot] = gearID end
 
-    return self:Start({
+    return {
         equip = equip,
         name = resolved,
         label = ('equipped "%s"'):format(resolved),
         helm = set.helm,
         cloak = set.cloak,
-    })
+    }, true
+end
+
+function Equip:EquipSet(name)
+    local job, ok = PrepareSetJob(name)
+    if not job then return ok end
+    return self:Start(job)
 end
 
 function Equip:UnequipSet(name)
@@ -478,6 +537,193 @@ function Equip:ClearSlot(slot)
     })
 end
 
-function Equip:IsBusy()
-    return self.job ~= nil
+--------------------------------------------------------------------------
+-- Managed action-bar macros
+--
+-- PickupInventoryItem is forbidden in combat. The client does still permit
+-- its native /equipslot command for main-hand, off-hand and ranged weapons,
+-- but only when it is literally part of a macro activated by the player.
+-- These character macros supply those secure lines and call back into the
+-- normal engine to snapshot undo state and finish non-weapon slots later.
+--------------------------------------------------------------------------
+
+local function MacroMarker(macroID)
+    return MACRO_RUN_PREFIX .. tostring(macroID) .. ")"
 end
+
+local function MacroName(macroID)
+    return "HG " .. tostring(macroID)
+end
+
+local function MacroAPIsAvailable()
+    return type(GetNumMacros) == "function"
+        and type(GetMacroInfo) == "function"
+        and type(CreateMacro) == "function"
+        and type(EditMacro) == "function"
+        and type(DeleteMacro) == "function"
+end
+
+local function CharacterMacroRange()
+    local _, count = GetNumMacros()
+    local first = (MAX_ACCOUNT_MACROS or FALLBACK_ACCOUNT_MACROS) + 1
+    return first, first + (count or 0) - 1
+end
+
+local function FindSetMacro(macroID)
+    if not MacroAPIsAvailable() then return nil end
+    local first, last = CharacterMacroRange()
+    local marker = MacroMarker(macroID)
+    for index = first, last do
+        local _, _, body = GetMacroInfo(index)
+        if body and body:find(marker, 1, true) then return index end
+    end
+end
+
+local function EnsureMacroID(set)
+    if type(set.macroID) == "number" and set.macroID > 0 then
+        return set.macroID
+    end
+
+    local macroID = tonumber(HelloGearCharDB.nextMacroID) or 1
+    while Sets:ByMacroID(macroID) do macroID = macroID + 1 end
+    set.macroID = macroID
+    HelloGearCharDB.nextMacroID = macroID + 1
+    return macroID
+end
+
+function Equip:SetMacroBody(set)
+    if not set or not set.macroID then return nil end
+    local lines = { MacroMarker(set.macroID) }
+    for _, slot in ipairs(COMBAT_EQUIP_SLOTS) do
+        local wanted = set.equip[slot]
+        if wanted and wanted ~= ns.EMPTY then
+            local itemString = Items.ToEquipString(wanted)
+            if itemString then
+                lines[#lines + 1] = ("/equipslot %d %s"):format(slot, itemString)
+            end
+        end
+    end
+    return table.concat(lines, "\n")
+end
+
+function Equip:SyncSetMacro(set)
+    if not set or not set.macroID or not MacroAPIsAvailable() then return end
+    self.dirtyMacros = self.dirtyMacros or {}
+    if InCombat() then
+        self.dirtyMacros[set.macroID] = true
+        return
+    end
+
+    local index = FindSetMacro(set.macroID)
+    if not index then return end
+    local body = self:SetMacroBody(set)
+    if not body or #body > MAX_MACRO_LENGTH then return end
+    EditMacro(index, MacroName(set.macroID), Sets:GetIcon(set), body)
+    self.dirtyMacros[set.macroID] = nil
+end
+
+function Equip:RemoveSetMacro(set)
+    if not set or not set.macroID or not MacroAPIsAvailable() then return end
+    if InCombat() then
+        self.macrosNeedCleanup = true
+        return
+    end
+    local index = FindSetMacro(set.macroID)
+    if index then DeleteMacro(index) end
+end
+
+function Equip:SyncAllSetMacros()
+    if InCombat() or not MacroAPIsAvailable() then return end
+
+    -- Remove only character macros carrying our private callback marker whose
+    -- set no longer exists. Work backwards because deleting shifts indices.
+    local first, last = CharacterMacroRange()
+    for index = last, first, -1 do
+        local _, _, body = GetMacroInfo(index)
+        local macroID = body and body:match("^/run HelloGear%.EquipMacro%((%d+)%)")
+        if macroID and not Sets:ByMacroID(tonumber(macroID)) then
+            DeleteMacro(index)
+        end
+    end
+
+    for _, name in ipairs(Sets:Names(true)) do
+        self:SyncSetMacro(Sets:Get(name))
+    end
+    self.macrosNeedCleanup = nil
+end
+
+function Equip:CreateSetMacro(name)
+    local resolved = Sets:Resolve(name)
+    local set = resolved and Sets:Get(resolved)
+    if not set then
+        ns:Print('no set named "%s"', tostring(name))
+        return false
+    end
+    if InCombat() then
+        ns:Print("can't create or update macros during combat")
+        return false
+    end
+    if not MacroAPIsAvailable() or type(PickupMacro) ~= "function" then
+        ns:Print("this client does not expose the macro API")
+        return false
+    end
+
+    local macroID = EnsureMacroID(set)
+    local body = self:SetMacroBody(set)
+    if #body > MAX_MACRO_LENGTH then
+        ns:Print("couldn't create the macro - its item identifiers are too long")
+        return false
+    end
+
+    local index = FindSetMacro(macroID)
+    if index then
+        index = EditMacro(index, MacroName(macroID), Sets:GetIcon(set), body) or index
+    else
+        local _, characterCount = GetNumMacros()
+        if (characterCount or 0) >= (MAX_CHARACTER_MACROS or FALLBACK_CHARACTER_MACROS) then
+            ns:Print("your character macro list is full")
+            return false
+        end
+        index = CreateMacro(MacroName(macroID), Sets:GetIcon(set), body, true)
+    end
+    if not index then
+        ns:Print("the client could not create the macro")
+        return false
+    end
+
+    PickupMacro(index)
+    ns:Print('put the "%s" macro on your cursor - drop it on an action bar', resolved)
+    return true
+end
+
+-- Called by the first line of a managed macro. Outside combat, defer the
+-- cursor engine until the macro's native /equipslot lines have run. In combat,
+-- Start queues the same prepared job; those lines still swap weapons now.
+function Equip:EquipMacro(macroID)
+    local name = Sets:ByMacroID(macroID)
+    if not name then
+        ns:Print("this HelloGear macro belongs to a set that no longer exists")
+        return false
+    end
+
+    local job, ok = PrepareSetJob(name)
+    if not job then return ok end
+    job.fromMacro = true
+    if InCombat() then return self:Start(job) end
+
+    C_Timer.After(0, function()
+        -- The set could only disappear here through another addon in the same
+        -- frame; do not run a now-orphaned prepared job if it did.
+        if Sets:ByMacroID(macroID) then self:Start(job) end
+    end)
+    return true
+end
+
+function Equip:IsBusy()
+    return self.job ~= nil or self.queuedJob ~= nil
+end
+
+ns:On("PLAYER_REGEN_ENABLED", function()
+    Equip:ResumeQueued()
+    Equip:SyncAllSetMacros()
+end)

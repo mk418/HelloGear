@@ -9,6 +9,7 @@ local ADDON = (arg[0]:match("^(.*)/Tests/[^/]+$")) or "."
 --------------------------------------------------------------------------
 
 local world = {}
+local macros = {}
 
 local ITEM_DB = {}  -- itemID -> {equipLoc, name}
 local function DefItem(id, equipLoc, name) ITEM_DB[id] = { equipLoc = equipLoc, name = name or ("Item" .. id) } end
@@ -25,6 +26,9 @@ DefItem(108, "INVTYPE_TRINKET",        "Trinket B")
 DefItem(109, "INVTYPE_WRIST",          "Bracers")   -- random suffix carrier
 DefItem(110, "INVTYPE_WEAPONOFFHAND",  "Offhand")
 DefItem(111, "INVTYPE_HEAD",           "Helm B")
+DefItem(112, "INVTYPE_RANGED",         "Bow")
+DefItem(113, "INVTYPE_WEAPON",         "Sword B")
+DefItem(114, "INVTYPE_SHIELD",         "Shield B")
 
 NUM_BANKBAGSLOTS = 6
 
@@ -43,6 +47,9 @@ local function reset()
     world.cursor = nil
     world.time = 1000
     world.cooldowns = {}   -- gearID -> duration
+    world.inCombat = false
+    world.pickedMacro = nil
+    macros = {}
 end
 reset()
 
@@ -201,6 +208,7 @@ function GetCursorInfo() return world.cursor and "item" or nil end
 function SpellIsTargeting() return false end
 function UnitLevel() return 60 end
 function UnitIsDeadOrGhost() return false end
+function InCombatLockdown() return world.inCombat end
 function CanDualWield() return true end
 function GetTime() return world.time end
 function wipe(t) for k in pairs(t) do t[k] = nil end return t end
@@ -242,6 +250,35 @@ local function CreateFrameStub()
     return f
 end
 function CreateFrame() return CreateFrameStub() end
+
+MAX_ACCOUNT_MACROS = 120
+MAX_CHARACTER_MACROS = 18
+function GetNumMacros() return 0, #macros end
+function GetMacroInfo(index)
+    if type(index) == "string" then
+        for _, macro in ipairs(macros) do
+            if macro.name == index then return macro.name, macro.icon, macro.body end
+        end
+        return nil
+    end
+    local macro = macros[index - MAX_ACCOUNT_MACROS]
+    if macro then return macro.name, macro.icon, macro.body end
+end
+function CreateMacro(name, icon, body, perCharacter)
+    if not perCharacter or #macros >= MAX_CHARACTER_MACROS then return nil end
+    macros[#macros + 1] = { name = name, icon = icon, body = body }
+    return MAX_ACCOUNT_MACROS + #macros
+end
+function EditMacro(index, name, icon, body)
+    local macro = macros[index - MAX_ACCOUNT_MACROS]
+    if not macro then return nil end
+    macro.name, macro.icon, macro.body = name, icon, body
+    return index
+end
+function DeleteMacro(index)
+    table.remove(macros, index - MAX_ACCOUNT_MACROS)
+end
+function PickupMacro(index) world.pickedMacro = index end
 
 --------------------------------------------------------------------------
 -- Namespace
@@ -347,6 +384,23 @@ local function bagContains(gearID)
     return false
 end
 
+-- Native /equipslot is implemented inside the client rather than through the
+-- restricted cursor API. The harness models its result with the same item
+-- cursor primitives, including returning the displaced item to a bag.
+local function secureEquip(gearID, invSlot)
+    for bag = 0, 4 do
+        for slot = 1, world.bags[bag].size do
+            if world.bags[bag].items[slot] == gearID then
+                C_Container.PickupContainerItem(bag, slot)
+                PickupInventoryItem(invSlot)
+                ClearCursor()
+                return true
+            end
+        end
+    end
+    return false
+end
+
 --------------------------------------------------------------------------
 -- Tests
 --------------------------------------------------------------------------
@@ -367,6 +421,9 @@ local function scenario(name, fn)
     Fire("BANKFRAME_CLOSED")
     HelloGearCharDB.sets, HelloGearCharDB.order = {}, {}
     HelloGearCharDB.currentSet = nil
+    HelloGearCharDB.nextMacroID = 1
+    Equip.job, Equip.queuedJob = nil, nil
+    Equip:SetWatching(false)
     messages = {}
     print(name)
     fn()
@@ -633,6 +690,108 @@ scenario("single-item swap from a slot menu", function()
     check(world.worn[17] == offhand, "off-hand item equipped")
     check(bagContains(shield), "shield stowed")
     check(world.worn[16] == sword, "main hand untouched")
+end)
+
+------------------------------------------------------------------
+scenario("managed macro contains exact combat-swappable items", function()
+    local helm, sword, shield, bow = G(100), G(113, 250), G(114), G(112)
+    local set = Sets:Create("Battle", {
+        icon = 12345,
+        equip = { [1] = helm, [16] = sword, [17] = shield, [18] = bow },
+    })
+
+    check(Equip:CreateSetMacro("Battle"), "macro created")
+    check(#macros == 1, "created one character macro")
+    check(world.pickedMacro == MAX_ACCOUNT_MACROS + 1, "put macro on the cursor")
+    check(set.macroID == 1, "assigned a stable set ID")
+
+    local body = macros[1].body
+    check(body:find("/run HelloGear.EquipMacro(1)", 1, true), "macro calls back into its set")
+    check(body:find("/equipslot 16 " .. Items.ToEquipString(sword), 1, true), "main hand is exact")
+    check(body:find("/equipslot 17 " .. Items.ToEquipString(shield), 1, true), "shield is exact")
+    check(body:find("/equipslot 18 " .. Items.ToEquipString(bow), 1, true), "ranged weapon is exact")
+    check(not body:find("/equipslot 1 ", 1, true), "armor is not sent through /equipslot")
+    check(#body <= 255, "macro fits the client limit")
+
+    local replacement = G(110)
+    Sets:SetSlot(set, 17, replacement)
+    check(macros[1].body:find(Items.ToEquipString(replacement), 1, true), "set edits update the macro")
+    check(not macros[1].body:find(Items.ToEquipString(shield), 1, true), "old shield was removed")
+
+    Sets:Delete("Battle")
+    check(#macros == 0, "deleting the set deletes its managed macro")
+end)
+
+------------------------------------------------------------------
+scenario("managed macro swaps weapons now and finishes the set after combat", function()
+    local oldHelm, newHelm = G(100), G(111)
+    local oldSword, newSword = G(105), G(113)
+    local oldOffhand, newShield = G(110), G(114)
+    world.worn[1] = oldHelm
+    world.worn[16] = oldSword
+    world.worn[17] = oldOffhand
+    putBag(newHelm); putBag(newSword); putBag(newShield)
+    local set = Sets:Create("Defend", {
+        equip = { [1] = newHelm, [16] = newSword, [17] = newShield },
+    })
+    Equip:CreateSetMacro("Defend")
+
+    world.inCombat = true
+    check(Equip:EquipMacro(set.macroID), "managed macro request accepted in combat")
+    check(Equip.job == nil and Equip.queuedJob ~= nil, "cursor job queued rather than run")
+    check(world.worn[1] == oldHelm and world.worn[16] == oldSword, "addon Lua moved nothing in combat")
+
+    check(secureEquip(newSword, 16), "native macro equipped the main hand")
+    check(secureEquip(newShield, 17), "native macro equipped the shield")
+    check(world.worn[16] == newSword and world.worn[17] == newShield, "weapons changed during combat")
+    check(world.worn[1] == oldHelm, "armor still waits")
+
+    world.inCombat = false
+    Fire("PLAYER_REGEN_ENABLED")
+    drain()
+    check(world.worn[1] == newHelm, "queued armor equipped after combat")
+    check(HelloGearCharDB.currentSet == "Defend", "set recorded after the queued job completed")
+    check(set.restore[1] == oldHelm and set.restore[16] == oldSword and set.restore[17] == oldOffhand,
+        "restore snapshot predates the native weapon swap")
+
+    Equip:UnequipSet("Defend")
+    drain()
+    check(world.worn[1] == oldHelm and world.worn[16] == oldSword and world.worn[17] == oldOffhand,
+        "unequip restores the full pre-combat loadout")
+end)
+
+------------------------------------------------------------------
+scenario("managed macro edits made in combat synchronize afterward", function()
+    local sword, shield, replacement = G(113), G(114), G(110)
+    local set = Sets:Create("Weapons", { equip = { [16] = sword, [17] = shield } })
+    Equip:CreateSetMacro("Weapons")
+    local before = macros[1].body
+
+    world.inCombat = true
+    Sets:SetSlot(set, 17, replacement)
+    check(macros[1].body == before, "protected macro was not edited in combat")
+
+    world.inCombat = false
+    Fire("PLAYER_REGEN_ENABLED")
+    check(macros[1].body:find(Items.ToEquipString(replacement), 1, true), "macro synchronized after combat")
+    check(not macros[1].body:find(Items.ToEquipString(shield), 1, true), "stale shield was removed afterward")
+end)
+
+------------------------------------------------------------------
+scenario("ordinary set requests queue safely in combat", function()
+    local helm = G(100)
+    putBag(helm)
+    Sets:Create("Queued", { equip = { [1] = helm } })
+
+    world.inCombat = true
+    check(Equip:EquipSet("Queued"), "request accepted")
+    check(world.worn[1] == nil, "restricted cursor move was not attempted")
+    check(Equip.queuedJob ~= nil, "request is queued")
+
+    world.inCombat = false
+    Fire("PLAYER_REGEN_ENABLED")
+    drain()
+    check(world.worn[1] == helm, "queued request ran after combat")
 end)
 
 ------------------------------------------------------------------

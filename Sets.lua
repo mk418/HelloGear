@@ -90,20 +90,31 @@ end
 function Sets:Create(name, set)
     if not name or name == "" then return nil end
     local store = self:Store()
-    local isNew = store[name] == nil
+    local previous = store[name]
+    local isNew = previous == nil
     set = set or {}
     set.name = name
     set.equip = set.equip or {}
+    -- A force import replaces the table, but an action-bar macro must keep
+    -- pointing at the same logical set.
+    if previous and previous.macroID and not set.macroID then
+        set.macroID = previous.macroID
+    end
     store[name] = set
     if isNew then
         table.insert(self:Order(), name)
     end
+    self:NotifyChanged(set)
     return set
 end
 
 function Sets:Delete(name)
     name = self:Resolve(name)
     if not name then return false end
+    local set = self:Store()[name]
+    if ns.Equip and ns.Equip.RemoveSetMacro then
+        ns.Equip:RemoveSetMacro(set)
+    end
     self:Store()[name] = nil
     local order = self:Order()
     for i, stored in ipairs(order) do
@@ -126,6 +137,15 @@ function Sets:Rename(oldName, newName)
     end
     if HelloGearCharDB.currentSet == oldName then HelloGearCharDB.currentSet = newName end
     return true
+end
+
+-- Set changes can happen through the paperdoll editor, Save, or a force
+-- import. A managed macro is deliberately updated in one place so it never
+-- keeps an obsolete weapon or shield after any of those paths.
+function Sets:NotifyChanged(set)
+    if ns.Equip and ns.Equip.SyncSetMacro then
+        ns.Equip:SyncSetMacro(set)
+    end
 end
 
 -- A new set captures everything currently worn, leaving bare slots ignored.
@@ -151,6 +171,7 @@ function Sets:SaveFromWorn(name, keepIcon)
     if not keepIcon or not set.icon then
         set.icon = self:SuggestIcon(set)
     end
+    self:NotifyChanged(set)
     return set
 end
 
@@ -268,6 +289,7 @@ end
 -- the set clear the slot, or nil to drop the slot from the set entirely.
 function Sets:SetSlot(set, slotID, gearID)
     set.equip[slotID] = gearID
+    self:NotifyChanged(set)
     return self:SlotState(set, slotID)
 end
 
@@ -280,7 +302,16 @@ function Sets:ToggleSlot(set, slotID)
     else
         set.equip[slotID] = nil
     end
+    self:NotifyChanged(set)
     return self:SlotState(set, slotID)
+end
+
+function Sets:ByMacroID(macroID)
+    macroID = tonumber(macroID)
+    if not macroID then return nil end
+    for name, set in pairs(self:Store()) do
+        if set.macroID == macroID then return name, set end
+    end
 end
 
 -- Slots the set would change if equipped right now.
